@@ -178,6 +178,34 @@ function SellCar() {
                   <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.mileage} onChange={e => setFormData({...formData, mileage: e.target.value})} />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Transmisión</label>
+                  <select 
+                    required 
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" 
+                    value={formData.transmission} 
+                    onChange={e => setFormData({...formData, transmission: e.target.value})}
+                  >
+                    <option value="Automatic">Automática</option>
+                    <option value="Manual">Manual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Combustible</label>
+                  <select 
+                    required 
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" 
+                    value={formData.fuel_type} 
+                    onChange={e => setFormData({...formData, fuel_type: e.target.value})}
+                  >
+                    <option value="Gasoline">Gasolina</option>
+                    <option value="Diesel">Diesel</option>
+                    <option value="Electric">Eléctrico</option>
+                    <option value="Hybrid">Híbrido</option>
+                  </select>
+                </div>
+              </div>
               <div>
                 <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">URL de la Imagen</label>
                 <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" placeholder="https://..." value={formData.image_url} onChange={e => setFormData({...formData, image_url: e.target.value})} />
@@ -324,7 +352,9 @@ function CarCard({ car }: { car: Car; key?: React.Key }) {
               <h3 className="text-xl font-bold text-zinc-900 group-hover:text-emerald-600 transition-colors">
                 {car.make} {car.model}
               </h3>
-              <p className="text-zinc-500 text-sm font-medium">{car.transmission} • {car.fuel_type}</p>
+              <p className="text-zinc-500 text-sm font-medium">
+                {car.transmission === "Automatic" ? "Automática" : car.transmission === "Manual" ? "Manual" : car.transmission} • {car.fuel_type === "Gasoline" ? "Gasolina" : car.fuel_type === "Diesel" ? "Diesel" : car.fuel_type}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-4 mt-4 pt-4 border-t border-zinc-50">
