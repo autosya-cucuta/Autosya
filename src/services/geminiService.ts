@@ -1,6 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const getApiKey = () => {
+  try {
+    // Try Vite environment variable first
+    const viteKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (viteKey) return viteKey;
+    
+    // Fallback to process.env (for server-side or specific build setups)
+    return process.env.GEMINI_API_KEY || "";
+  } catch (e) {
+    return process.env.GEMINI_API_KEY || "";
+  }
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export async function getCarAdvice(prompt: string, inventory: any[]) {
   const inventoryContext = inventory.map(c => `${c.make} ${c.model} (${c.year}) - $${c.price}`).join(", ");
