@@ -1,45 +1,19 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
+import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("cars.db");
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 
-// Initialize database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS cars (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    make TEXT NOT NULL,
-    model TEXT NOT NULL,
-    year INTEGER NOT NULL,
-    price INTEGER NOT NULL,
-    mileage INTEGER NOT NULL,
-    transmission TEXT,
-    fuel_type TEXT,
-    image_url TEXT,
-    description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-// Seed data if empty
-const count = db.prepare("SELECT COUNT(*) as count FROM cars").get() as { count: number };
-if (count.count === 0) {
-  const insert = db.prepare("INSERT INTO cars (make, model, year, price, mileage, transmission, fuel_type, image_url, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-  const seedCars = [
-    ["BMW", "M4 Competition", 2022, 75000, 12000, "Automatic", "Gasoline", "https://images.unsplash.com/photo-1617531653332-bd46c24f2068?auto=format&fit=crop&q=80&w=800", "Pristine condition, full service history."],
-    ["Audi", "RS6 Avant", 2021, 115000, 18000, "Automatic", "Gasoline", "https://images.unsplash.com/photo-1606152421802-db97b9c7a11b?auto=format&fit=crop&q=80&w=800", "The ultimate family wagon. High spec."],
-    ["Porsche", "911 Carrera S", 2020, 125000, 8000, "PDK", "Gasoline", "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800", "Classic silver, sports exhaust, premium sound."],
-    ["Tesla", "Model 3 Performance", 2023, 52000, 5000, "Automatic", "Electric", "https://images.unsplash.com/photo-1560958089-b8a1929cea89?auto=format&fit=crop&q=80&w=800", "Like new, full self-driving capability included."],
-    ["Toyota", "Land Cruiser", 2019, 68000, 45000, "Automatic", "Diesel", "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=800", "Rugged and ready for any adventure."],
-    ["Mercedes-Benz", "G63 AMG", 2021, 185000, 15000, "Automatic", "Gasoline", "https://images.unsplash.com/photo-1520031441872-265e4ff70366?auto=format&fit=crop&q=80&w=800", "Iconic design, unmatched performance."]
-  ];
-  seedCars.forEach(car => insert.run(...car));
-}
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function startServer() {
   const app = express();
@@ -48,26 +22,37 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
-  app.get("/api/cars", (req, res) => {
-    const cars = db.prepare("SELECT * FROM cars ORDER BY created_at DESC").all();
-    res.json(cars);
+  app.get("/api/cars", async (req, res) => {
+    const { data, error } = await supabase
+      .from("cars")
+      .select("*")
+      .order("created_at", { ascending: false });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
   });
 
-  app.get("/api/cars/:id", (req, res) => {
-    const car = db.prepare("SELECT * FROM cars WHERE id = ?").get(req.params.id);
-    if (car) {
-      res.json(car);
-    } else {
-      res.status(404).json({ error: "Car not found" });
-    }
+  app.get("/api/cars/:id", async (req, res) => {
+    const { data, error } = await supabase
+      .from("cars")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    
+    if (error) return res.status(404).json({ error: "Car not found" });
+    res.json(data);
   });
 
-  app.post("/api/cars", (req, res) => {
+  app.post("/api/cars", async (req, res) => {
     const { make, model, year, price, mileage, transmission, fuel_type, image_url, description } = req.body;
-    const result = db.prepare(
-      "INSERT INTO cars (make, model, year, price, mileage, transmission, fuel_type, image_url, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(make, model, year, price, mileage, transmission, fuel_type, image_url, description);
-    res.json({ id: result.lastInsertRowid });
+    const { data, error } = await supabase
+      .from("cars")
+      .insert([{ make, model, year, price, mileage, transmission, fuel_type, image_url, description }])
+      .select()
+      .single();
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
   });
 
   // Vite middleware for development
