@@ -1,11 +1,11 @@
 import React, { useState, useEffect, FormEvent } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
-import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles } from "lucide-react";
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from "react-router-dom";
+import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
-import { supabase } from "./lib/supabase";
+import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { getCarAdvice, estimateCarValue } from "./services/geminiService";
 
 // --- Components ---
@@ -653,26 +653,24 @@ function Inventory() {
 }
 
 function CarDetail() {
+  const { id } = useParams();
   const [car, setCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // In a real app, use useParams()
-  const carId = window.location.pathname.split("/").pop();
-
   useEffect(() => {
     async function fetchCar() {
-      if (!carId) return;
+      if (!id || !isSupabaseConfigured) return;
       const { data, error } = await supabase
         .from("cars")
         .select("*")
-        .eq("id", carId)
+        .eq("id", id)
         .single();
       
       if (data) setCar(data);
       setLoading(false);
     }
     fetchCar();
-  }, [carId]);
+  }, [id]);
 
   if (loading) return <div className="pt-40 text-center">Loading...</div>;
   if (!car) return <div className="pt-40 text-center">Car not found</div>;
@@ -811,16 +809,48 @@ function Footer() {
   );
 }
 
+function ConfigError() {
+  return (
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-white rounded-[40px] p-10 text-center shadow-2xl">
+        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-8">
+          <AlertCircle className="w-10 h-10 text-red-500" />
+        </div>
+        <h1 className="text-3xl font-black text-zinc-900 mb-4 tracking-tight">CONFIGURACIÓN PENDIENTE</h1>
+        <p className="text-zinc-500 mb-8 leading-relaxed">
+          Tu aplicación se ha desplegado correctamente, pero faltan las <b>Variables de Entorno</b> en Vercel para conectar con Supabase.
+        </p>
+        <div className="bg-zinc-50 p-6 rounded-3xl text-left space-y-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-red-500" />
+            <code className="text-xs font-bold text-zinc-700">VITE_SUPABASE_URL</code>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-red-500" />
+            <code className="text-xs font-bold text-zinc-700">VITE_SUPABASE_ANON_KEY</code>
+          </div>
+        </div>
+        <p className="text-xs text-zinc-400 italic">
+          Añádelas en Vercel (Settings &gt; Environment Variables) y vuelve a desplegar.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [inventory, setInventory] = useState<Car[]>([]);
 
   useEffect(() => {
     async function fetchInventory() {
+      if (!isSupabaseConfigured) return;
       const { data } = await supabase.from("cars").select("*");
       if (data) setInventory(data);
     }
     fetchInventory();
   }, []);
+
+  if (!isSupabaseConfigured) return <ConfigError />;
 
   return (
     <Router>
