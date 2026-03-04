@@ -1,7 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from "react-router-dom";
 import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
@@ -10,6 +9,8 @@ import { getCarAdvice, estimateCarValue } from "./services/geminiService";
 
 // --- Components ---
 
+// function AIAssistant({ inventory }: { inventory: Car[] }) {
+// ... simplified for debug
 function AIAssistant({ inventory }: { inventory: Car[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([
@@ -37,64 +38,57 @@ function AIAssistant({ inventory }: { inventory: Car[] }) {
 
   return (
     <div className="fixed bottom-8 right-8 z-[60]">
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="absolute bottom-20 right-0 w-80 md:w-96 h-[500px] bg-white rounded-[32px] shadow-2xl border border-zinc-100 flex flex-col overflow-hidden"
-          >
-            <div className="p-6 bg-zinc-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="font-bold">AI Assistant</div>
-                  <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Online</div>
-                </div>
+      {isOpen && (
+        <div className="absolute bottom-20 right-0 w-80 md:w-96 h-[500px] bg-white rounded-[32px] shadow-2xl border border-zinc-100 flex flex-col overflow-hidden">
+          <div className="p-6 bg-zinc-900 text-white flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
+                <Sparkles className="w-6 h-6" />
               </div>
-              <button onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
+              <div>
+                <div className="font-bold">AI Assistant</div>
+                <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Online</div>
+              </div>
             </div>
+            <button onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
+          </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((m, i) => (
-                <div key={i} className={cn(
-                  "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed",
-                  m.role === "user" 
-                    ? "bg-zinc-100 text-zinc-900 ml-auto rounded-tr-none" 
-                    : "bg-emerald-50 text-emerald-900 rounded-tl-none"
-                )}>
-                  {m.text}
-                </div>
-              ))}
-              {isTyping && (
-                <div className="bg-emerald-50 text-emerald-900 p-4 rounded-2xl rounded-tl-none max-w-[85%] text-sm animate-pulse">
-                  Thinking...
-                </div>
-              )}
-            </div>
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {messages.map((m, i) => (
+              <div key={i} className={cn(
+                "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed",
+                m.role === "user" 
+                  ? "bg-zinc-100 text-zinc-900 ml-auto rounded-tr-none" 
+                  : "bg-emerald-50 text-emerald-900 rounded-tl-none"
+              )}>
+                {m.text}
+              </div>
+            ))}
+            {isTyping && (
+              <div className="bg-emerald-50 text-emerald-900 p-4 rounded-2xl rounded-tl-none max-w-[85%] text-sm animate-pulse">
+                Thinking...
+              </div>
+            )}
+          </div>
 
-            <div className="p-4 border-t border-zinc-100 flex gap-2">
-              <input
-                type="text"
-                placeholder="Ask anything..."
-                className="flex-1 bg-zinc-50 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              />
-              <button 
-                onClick={handleSend}
-                className="bg-emerald-500 text-white p-2 rounded-xl hover:bg-emerald-600 transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <div className="p-4 border-t border-zinc-100 flex gap-2">
+            <input
+              type="text"
+              placeholder="Ask anything..."
+              className="flex-1 bg-zinc-50 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            />
+            <button 
+              onClick={handleSend}
+              className="bg-emerald-500 text-white p-2 rounded-xl hover:bg-emerald-600 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -281,47 +275,34 @@ function Navbar() {
         </button>
       </div>
 
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="absolute top-full left-0 right-0 bg-white border-t p-6 md:hidden flex flex-col gap-4 shadow-xl"
-          >
-            {["Inventory", "Sell", "Services", "About"].map((item) => (
-              <Link
-                key={item}
-                to={item === "Inventory" ? "/inventory" : `/${item.toLowerCase()}`}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-lg font-medium text-zinc-900"
-              >
-                {item}
-              </Link>
-            ))}
+      {isMobileMenuOpen && (
+        <div className="absolute top-full left-0 right-0 bg-white border-t p-6 md:hidden flex flex-col gap-4 shadow-xl">
+          {["Inventory", "Sell", "Services", "About"].map((item) => (
             <Link
-              to="/inventory"
+              key={item}
+              to={item === "Inventory" ? "/inventory" : `/${item.toLowerCase()}`}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="bg-emerald-500 text-white text-center py-3 rounded-xl font-bold"
+              className="text-lg font-medium text-zinc-900"
             >
-              Browse Cars
+              {item}
             </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ))}
+          <Link
+            to="/inventory"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="bg-emerald-500 text-white text-center py-3 rounded-xl font-bold"
+          >
+            Browse Cars
+          </Link>
+        </div>
+      )}
     </nav>
   );
 }
 
 function CarCard({ car }: { car: Car; key?: React.Key }) {
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ y: -8 }}
-      className="group bg-white rounded-3xl overflow-hidden border border-zinc-100 shadow-sm hover:shadow-2xl hover:shadow-black/5 transition-all duration-500"
-    >
+    <div className="group bg-white rounded-3xl overflow-hidden border border-zinc-100 shadow-sm hover:shadow-2xl hover:shadow-black/5 transition-all duration-500">
       <Link to={`/car/${car.id}`}>
         <div className="relative aspect-[16/10] overflow-hidden">
           <img
@@ -359,7 +340,7 @@ function CarCard({ car }: { car: Car; key?: React.Key }) {
           </div>
         </div>
       </Link>
-    </motion.div>
+    </div>
   );
 }
 
@@ -396,11 +377,7 @@ function Home() {
         </div>
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
+          <div>
             <span className="inline-block px-4 py-1.5 mb-6 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-xs font-bold uppercase tracking-widest">
               Premium Used Car Marketplace
             </span>
@@ -427,7 +404,7 @@ function Home() {
                 Sell Your Car
               </Link>
             </div>
-          </motion.div>
+          </div>
         </div>
 
         {/* Floating Stats */}
@@ -437,16 +414,13 @@ function Home() {
             { label: "Happy Customers", value: "12k+" },
             { label: "Certified Dealers", value: "45" }
           ].map((stat, i) => (
-            <motion.div
+            <div
               key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 + i * 0.1 }}
               className="bg-white/5 backdrop-blur-xl border border-white/10 p-6 rounded-3xl text-center"
             >
               <div className="text-3xl font-black text-white mb-1">{stat.value}</div>
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">{stat.label}</div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -679,11 +653,7 @@ function CarDetail() {
     <div className="pt-32 pb-20 px-6 min-h-screen bg-white">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-8"
-          >
+          <div className="space-y-8">
             <div className="aspect-[16/10] rounded-[40px] overflow-hidden shadow-2xl">
               <img
                 src={car.image_url}
@@ -699,12 +669,9 @@ function CarDetail() {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
+          <div>
             <div className="mb-8">
               <div className="flex items-center gap-3 mb-4">
                 <span className="bg-zinc-100 px-4 py-1 rounded-full text-xs font-bold text-zinc-600">{car.year}</span>
@@ -746,7 +713,7 @@ function CarDetail() {
                 <Mail className="w-5 h-5" /> Inquire Now
               </button>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>
@@ -811,26 +778,51 @@ function Footer() {
 
 function ConfigError() {
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-      <div className="max-w-md w-full bg-white rounded-[40px] p-10 text-center shadow-2xl">
-        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-8">
-          <AlertCircle className="w-10 h-10 text-red-500" />
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#09090b', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      padding: '24px',
+      fontFamily: 'sans-serif'
+    }}>
+      <div style={{ 
+        maxWidth: '400px', 
+        width: '100%', 
+        backgroundColor: 'white', 
+        borderRadius: '32px', 
+        padding: '40px', 
+        textAlign: 'center', 
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' 
+      }}>
+        <div style={{ 
+          width: '80px', 
+          height: '80px', 
+          backgroundColor: '#fef2f2', 
+          borderRadius: '50%', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          margin: '0 auto 32px auto' 
+        }}>
+          <AlertCircle style={{ width: '40px', height: '40px', color: '#ef4444' }} />
         </div>
-        <h1 className="text-3xl font-black text-zinc-900 mb-4 tracking-tight">CONFIGURACIÓN PENDIENTE</h1>
-        <p className="text-zinc-500 mb-8 leading-relaxed">
+        <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#18181b', marginBottom: '16px' }}>CONFIGURACIÓN PENDIENTE</h1>
+        <p style={{ color: '#71717a', marginBottom: '32px', lineHeight: '1.6' }}>
           Tu aplicación se ha desplegado correctamente, pero faltan las <b>Variables de Entorno</b> en Vercel para conectar con Supabase.
         </p>
-        <div className="bg-zinc-50 p-6 rounded-3xl text-left space-y-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
-            <code className="text-xs font-bold text-zinc-700">VITE_SUPABASE_URL</code>
+        <div style={{ backgroundColor: '#f4f4f5', padding: '24px', borderRadius: '24px', textAlign: 'left', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+            <code style={{ fontSize: '12px', fontWeight: 'bold', color: '#3f3f46' }}>VITE_SUPABASE_URL</code>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
-            <code className="text-xs font-bold text-zinc-700">VITE_SUPABASE_ANON_KEY</code>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+            <code style={{ fontSize: '12px', fontWeight: 'bold', color: '#3f3f46' }}>VITE_SUPABASE_ANON_KEY</code>
           </div>
         </div>
-        <p className="text-xs text-zinc-400 italic">
+        <p style={{ fontSize: '12px', color: '#a1a1aa', fontStyle: 'italic' }}>
           Añádelas en Vercel (Settings &gt; Environment Variables) y vuelve a desplegar.
         </p>
       </div>
@@ -840,17 +832,48 @@ function ConfigError() {
 
 export default function App() {
   const [inventory, setInventory] = useState<Car[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log("App mounted, checking config...");
+    console.log("Supabase Configured:", isSupabaseConfigured);
+    
+    if (!isSupabaseConfigured) {
+      console.warn("Supabase is not configured. Please check environment variables.");
+      return;
+    }
+
     async function fetchInventory() {
-      if (!isSupabaseConfigured) return;
-      const { data } = await supabase.from("cars").select("*");
-      if (data) setInventory(data);
+      try {
+        const { data, error: sbError } = await supabase.from("cars").select("*");
+        if (sbError) throw sbError;
+        if (data) setInventory(data);
+      } catch (err: any) {
+        console.error("Failed to fetch inventory:", err);
+        setError(err.message);
+      }
     }
     fetchInventory();
   }, []);
 
-  if (!isSupabaseConfigured) return <ConfigError />;
+  if (!isSupabaseConfigured) {
+    return <ConfigError />;
+  }
+
+  if (error) {
+    return (
+      <div className="p-20 text-center">
+        <h1 className="text-2xl font-bold text-red-600">Database Error</h1>
+        <p className="text-zinc-500 mt-4">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-8 bg-black text-white px-6 py-2 rounded-xl"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <Router>
