@@ -270,7 +270,7 @@ function Navbar() {
             "text-xl font-bold tracking-tight",
             isScrolled ? "text-black" : "text-white"
           )}>
-            Autosya
+            Autosya [ES]
           </span>
         </Link>
 
@@ -413,7 +413,7 @@ function Home() {
             </span>
             <h1 className="text-6xl md:text-8xl font-black text-white mb-8 tracking-tighter leading-[0.9]">
               CONDUCE TU <br />
-              <span className="text-emerald-500">SUEÑO</span> HOY.
+              <span className="text-emerald-500">SUEÑO [ES]</span> HOY.
             </h1>
             <p className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 font-medium">
               Vive el futuro de la compra de vehículos. Precios transparentes, 

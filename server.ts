@@ -39,7 +39,7 @@ async function startServer() {
       .eq("id", req.params.id)
       .single();
     
-    if (error) return res.status(404).json({ error: "Car not found" });
+    if (error) return res.status(404).json({ error: "Vehículo no encontrado" });
     res.json(data);
   });
 

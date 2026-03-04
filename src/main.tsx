@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 
 console.log("Main entry point hit. Initializing React...");
+(window as any).AUTOSYA_VERSION = "2.0-ES";
 
 const container = document.getElementById('root');
 if (!container) {
