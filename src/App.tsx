@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
+import { supabase } from "./lib/supabase";
 import { getCarAdvice, estimateCarValue } from "./services/geminiService";
 
 // --- Components ---
@@ -129,17 +130,20 @@ function SellCar() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const res = await fetch("/api/cars", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const { data, error } = await supabase
+      .from("cars")
+      .insert([{
         ...formData,
         year: parseInt(formData.year),
         price: parseInt(formData.price),
         mileage: parseInt(formData.mileage)
-      })
-    });
-    if (res.ok) {
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error listing car: " + error.message);
+    } else {
       alert("Car listed successfully!");
       navigate("/inventory");
     }
@@ -364,12 +368,17 @@ function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/cars")
-      .then(res => res.json())
-      .then(data => {
-        setCars(data.slice(0, 3));
-        setLoading(false);
-      });
+    async function fetchCars() {
+      const { data, error } = await supabase
+        .from("cars")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(3);
+      
+      if (data) setCars(data);
+      setLoading(false);
+    }
+    fetchCars();
   }, []);
 
   return (
@@ -532,13 +541,19 @@ function Inventory() {
   const [makeFilter, setMakeFilter] = useState("All");
 
   useEffect(() => {
-    fetch("/api/cars")
-      .then(res => res.json())
-      .then(data => {
+    async function fetchCars() {
+      const { data, error } = await supabase
+        .from("cars")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (data) {
         setCars(data);
         setFilteredCars(data);
-        setLoading(false);
-      });
+      }
+      setLoading(false);
+    }
+    fetchCars();
   }, []);
 
   useEffect(() => {
@@ -638,7 +653,6 @@ function Inventory() {
 }
 
 function CarDetail() {
-  const { id } = useNavigate() as any; // Mocking for now, will use useParams
   const [car, setCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -646,12 +660,18 @@ function CarDetail() {
   const carId = window.location.pathname.split("/").pop();
 
   useEffect(() => {
-    fetch(`/api/cars/${carId}`)
-      .then(res => res.json())
-      .then(data => {
-        setCar(data);
-        setLoading(false);
-      });
+    async function fetchCar() {
+      if (!carId) return;
+      const { data, error } = await supabase
+        .from("cars")
+        .select("*")
+        .eq("id", carId)
+        .single();
+      
+      if (data) setCar(data);
+      setLoading(false);
+    }
+    fetchCar();
   }, [carId]);
 
   if (loading) return <div className="pt-40 text-center">Loading...</div>;
@@ -795,7 +815,11 @@ export default function App() {
   const [inventory, setInventory] = useState<Car[]>([]);
 
   useEffect(() => {
-    fetch("/api/cars").then(res => res.json()).then(setInventory);
+    async function fetchInventory() {
+      const { data } = await supabase.from("cars").select("*");
+      if (data) setInventory(data);
+    }
+    fetchInventory();
   }, []);
 
   return (
