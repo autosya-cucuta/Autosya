@@ -7,12 +7,12 @@ export async function getCarAdvice(prompt: string, inventory: any[]) {
   
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `You are a helpful car expert at AutoMarket Pro. 
-    Our current inventory includes: ${inventoryContext}.
+    contents: `Eres un experto asesor de carros en Autosya, ubicado en Cúcuta, Colombia. 
+    Nuestro inventario actual incluye: ${inventoryContext}.
     
-    User asks: ${prompt}
+    El usuario pregunta: ${prompt}
     
-    Provide a concise, professional, and helpful response. If recommending a car from our inventory, highlight why it fits their needs.`,
+    Proporciona una respuesta concisa, profesional y útil en español. Si recomiendas un carro de nuestro inventario, resalta por qué se ajusta a sus necesidades.`,
   });
 
   return response.text;
@@ -21,9 +21,9 @@ export async function getCarAdvice(prompt: string, inventory: any[]) {
 export async function estimateCarValue(carDetails: string) {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `You are a car valuation expert. Based on these details: ${carDetails}, 
-    provide a fair market value estimate (range) and 3 tips to increase the resale value. 
-    Be professional and realistic.`,
+    contents: `Eres un experto en valoración de carros. Basado en estos detalles: ${carDetails}, 
+    proporciona una estimación del valor justo de mercado (rango) en pesos colombianos o dólares según sea apropiado para el mercado de Cúcuta, y 3 consejos para aumentar el valor de reventa. 
+    Sé profesional, realista y responde en español.`,
   });
 
   return response.text;
