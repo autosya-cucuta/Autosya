@@ -62,18 +62,24 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
-    });
-  }
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: "spa",
+  });
+  app.use(vite.middlewares);
+  
+  // SPA fallback - serve index.html for all non-API routes
+  app.get("*", async (req, res, next) => {
+    if (req.path.startsWith("/api")) return next();
+    try {
+      const template = await vite.transformIndexHtml(req.originalUrl, 
+        await import("fs").then(fs => fs.promises.readFile(path.join(__dirname, "index.html"), "utf-8"))
+      );
+      res.status(200).set({ "Content-Type": "text/html" }).end(template);
+    } catch (e) {
+      next(e);
+    }
+  });
 
   const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
