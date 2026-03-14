@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -20,7 +21,7 @@ const supabase = supabaseUrl && supabaseAnonKey
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = parseInt(process.env.PORT || "3000", 10);
 
   app.use(express.json());
 
@@ -69,32 +70,40 @@ async function startServer() {
   app.use(vite.middlewares);
   
   // SPA fallback - serve index.html for all non-API routes
-  app.get("*", async (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
+  app.use("*", async (req, res, next) => {
+    const url = req.originalUrl;
+    if (url.startsWith("/api")) return next();
+    
     try {
-      const template = await vite.transformIndexHtml(req.originalUrl, 
-        await import("fs").then(fs => fs.promises.readFile(path.join(__dirname, "index.html"), "utf-8"))
-      );
+      let template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
+      template = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(template);
-    } catch (e) {
-      next(e);
+    } catch (e: any) {
+      vite.ssrFixStacktrace(e);
+      console.error(e);
+      res.status(500).end(e.message);
     }
   });
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-
-  server.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code === "EADDRINUSE") {
-      console.log(`Port ${PORT} is in use, trying ${Number(PORT) + 1}...`);
-      app.listen(Number(PORT) + 1, "0.0.0.0", () => {
-        console.log(`Server running on http://localhost:${Number(PORT) + 1}`);
+  // Try to start server, with fallback ports
+  const tryListen = (port: number, maxAttempts = 5, attempt = 1): void => {
+    const server = app.listen(port, "0.0.0.0")
+      .on("listening", () => {
+        console.log(`Server running on http://localhost:${port}`);
+      })
+      .on("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE" && attempt < maxAttempts) {
+          console.log(`Port ${port} in use, trying ${port + 1}...`);
+          server.close();
+          tryListen(port + 1, maxAttempts, attempt + 1);
+        } else {
+          console.error("Failed to start server:", err.message);
+          process.exit(1);
+        }
       });
-    } else {
-      throw err;
-    }
-  });
+  };
+
+  tryListen(PORT);
 }
 
 startServer();
