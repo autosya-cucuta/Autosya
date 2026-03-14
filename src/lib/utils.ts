@@ -16,5 +16,17 @@ export interface Car {
   fuel_type: string;
   image_url: string;
   description: string;
+  user_id: string;
   created_at: string;
+  // New fields from legacy data
+  color?: string;
+  phone?: string;
+  engine?: string;
+  plate_last_digit?: string;
+  plate_city?: string;
+  soat_until?: string;
+  techno_until?: string;
+  whatsapp?: string;
+  plate?: string;
+  legacy_id?: number;
 }

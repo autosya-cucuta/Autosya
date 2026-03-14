@@ -1,11 +1,13 @@
 import React, { useState, useEffect, FormEvent } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from "react-router-dom";
-import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut, ChevronLeft, MessageCircle } from "lucide-react";
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut, ChevronLeft, MessageCircle, Eye, EyeOff, Settings, Heart, History, ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { getCarAdvice, estimateCarValue } from "./services/geminiService";
+import { migrateAds, revertMigration } from "./services/migrationService";
 import { BRANDS_DATA } from "./constants";
 
 // --- Components ---
@@ -21,49 +23,56 @@ function WhatsAppButton() {
 
   return (
     <div className="fixed bottom-8 right-8 z-[70] flex flex-col items-end gap-4">
-      {isOpen && (
-        <div className="w-[320px] bg-white rounded-2xl shadow-2xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-          {/* Header */}
-          <div className="bg-[#2db742] p-6 text-white">
-            <div className="flex items-center gap-3 mb-2">
-              <MessageCircle className="w-8 h-8 fill-current" />
-              <h3 className="text-lg font-bold">Iniciar una conversacion</h3>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="w-[320px] bg-white rounded-2xl shadow-2xl border border-zinc-100 overflow-hidden"
+          >
+            {/* Header */}
+            <div className="bg-[#2db742] p-6 text-white">
+              <div className="flex items-center gap-3 mb-2">
+                <MessageCircle className="w-8 h-8 fill-current" />
+                <h3 className="text-lg font-bold">Iniciar una conversacion</h3>
+              </div>
+              <p className="text-xs opacity-90 leading-relaxed">
+                ¡Hola! Haga clic en uno de nuestros miembros a continuación para chatear
+              </p>
             </div>
-            <p className="text-xs opacity-90 leading-relaxed">
-              ¡Hola! Haga clic en uno de nuestros miembros a continuación para chatear
-            </p>
-          </div>
 
-          {/* Body */}
-          <div className="p-4 bg-zinc-50/50">
-            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-4 px-2">
-              El equipo suele responder en unos minutos.
-            </p>
-            <div className="space-y-3">
-              {contactOptions.map((option, i) => (
-                <a
-                  key={i}
-                  href={`https://wa.me/${option.phone}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-4 bg-white rounded-xl border-l-4 border-[#2db742] shadow-sm hover:shadow-md transition-all group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-[#2db742]/10 rounded-full flex items-center justify-center">
-                      <MessageCircle className="w-6 h-6 text-[#2db742] fill-current" />
+            {/* Body */}
+            <div className="p-4 bg-zinc-50/50">
+              <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-4 px-2">
+                El equipo suele responder en unos minutos.
+              </p>
+              <div className="space-y-3">
+                {contactOptions.map((option, i) => (
+                  <a
+                    key={i}
+                    href={`https://wa.me/${option.phone}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-4 bg-white rounded-xl border-l-4 border-[#2db742] shadow-sm hover:shadow-md transition-all group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-[#2db742]/10 rounded-full flex items-center justify-center">
+                        <MessageCircle className="w-6 h-6 text-[#2db742] fill-current" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-zinc-900">{option.title}</div>
+                        <div className="text-xs text-zinc-400">{option.subtitle}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm font-bold text-zinc-900">{option.title}</div>
-                      <div className="text-xs text-zinc-400">{option.subtitle}</div>
-                    </div>
-                  </div>
-                  <MessageCircle className="w-5 h-5 text-[#2db742] opacity-0 group-hover:opacity-100 transition-opacity" />
-                </a>
-              ))}
+                    <MessageCircle className="w-5 h-5 text-[#2db742] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </a>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -86,64 +95,78 @@ function WhatsAppButton() {
 function BrandsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const brand = BRANDS_DATA.find(b => b.name === selectedBrand);
 
   return (
-    <div className="fixed inset-0 z-[100] flex justify-end">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-        <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
-          {selectedBrand ? (
-            <button 
-              onClick={() => setSelectedBrand(null)}
-              className="flex items-center gap-2 text-zinc-900 font-bold hover:text-red-600 transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              <span>Ir atrás</span>
-            </button>
-          ) : (
-            <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tight">Marcas</h2>
-          )}
-          <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
-            <X className="w-6 h-6 text-zinc-400" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {!selectedBrand ? (
-            <div className="divide-y divide-zinc-50">
-              {BRANDS_DATA.map((brand) => (
-                <button
-                  key={brand.name}
-                  onClick={() => brand.hasModels ? setSelectedBrand(brand.name) : null}
-                  className="w-full p-6 flex items-center justify-between hover:bg-zinc-50 transition-colors group"
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex justify-end">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+            onClick={onClose} 
+          />
+          <motion.div 
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col"
+          >
+            <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+              {selectedBrand ? (
+                <button 
+                  onClick={() => setSelectedBrand(null)}
+                  className="flex items-center gap-2 text-zinc-900 font-bold hover:text-red-600 transition-colors"
                 >
-                  <span className="text-lg font-medium text-zinc-600 group-hover:text-zinc-900">{brand.name}</span>
-                  {brand.hasModels && <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-zinc-900" />}
+                  <ChevronLeft className="w-5 h-5" />
+                  <span>Ir atrás</span>
                 </button>
-              ))}
+              ) : (
+                <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tight">Marcas</h2>
+              )}
+              <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
+                <X className="w-6 h-6 text-zinc-400" />
+              </button>
             </div>
-          ) : (
-            <div className="p-6">
-              <h3 className="text-3xl font-black text-red-600 uppercase mb-8 tracking-tight">{selectedBrand}</h3>
-              <div className="flex flex-wrap gap-3">
-                {brand?.models?.map((model) => (
-                  <button
-                    key={model.name}
-                    className="flex items-center gap-3 px-4 py-2 bg-white border border-zinc-200 rounded-xl hover:border-red-600 hover:shadow-md transition-all group"
-                  >
-                    <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900">{model.name}</span>
-                    <span className="text-sm font-bold text-zinc-400 group-hover:text-red-600">{model.count}</span>
-                  </button>
-                ))}
-              </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {!selectedBrand ? (
+                <div className="divide-y divide-zinc-50">
+                  {BRANDS_DATA.map((brand) => (
+                    <button
+                      key={brand.name}
+                      onClick={() => brand.hasModels ? setSelectedBrand(brand.name) : null}
+                      className="w-full p-6 flex items-center justify-between hover:bg-zinc-50 transition-colors group"
+                    >
+                      <span className="text-lg font-medium text-zinc-600 group-hover:text-zinc-900">{brand.name}</span>
+                      {brand.hasModels && <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-zinc-900" />}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6">
+                  <h3 className="text-3xl font-black text-red-600 uppercase mb-8 tracking-tight">{selectedBrand}</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {brand?.models?.map((model) => (
+                      <button
+                        key={model.name}
+                        className="flex items-center gap-3 px-4 py-2 bg-white border border-zinc-200 rounded-xl hover:border-red-600 hover:shadow-md transition-all group"
+                      >
+                        <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900">{model.name}</span>
+                        <span className="text-sm font-bold text-zinc-400 group-hover:text-red-600">{model.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -241,7 +264,9 @@ function SellCar() {
   const [loadingUser, setLoadingUser] = useState(true);
   const [formData, setFormData] = useState({
     make: "", model: "", year: "", price: "", mileage: "", 
-    transmission: "Automatic", fuel_type: "Gasoline", image_url: "", description: ""
+    transmission: "Automatic", fuel_type: "Gasoline", image_url: "", description: "",
+    color: "", phone: "", engine: "", plate_last_digit: "", plate_city: "",
+    soat_until: "", techno_until: "", whatsapp: "", plate: ""
   });
   const [isEstimating, setIsEstimating] = useState(false);
   const [estimate, setEstimate] = useState("");
@@ -384,6 +409,55 @@ function SellCar() {
                 <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Descripción</label>
                 <textarea required rows={4} className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
               </div>
+
+              <div className="pt-6 border-t border-zinc-100">
+                <h3 className="text-sm font-bold text-zinc-900 mb-6 uppercase tracking-widest">Información Adicional</h3>
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Color</label>
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Motor / Cilindrada</label>
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" placeholder="Ej: 2.0L" value={formData.engine} onChange={e => setFormData({...formData, engine: e.target.value})} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-6 mb-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Placa</label>
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" placeholder="ABC-123" value={formData.plate} onChange={e => setFormData({...formData, plate: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Último Dígito</label>
+                    <input type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.plate_last_digit} onChange={e => setFormData({...formData, plate_last_digit: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Ciudad Placa</label>
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.plate_city} onChange={e => setFormData({...formData, plate_city: e.target.value})} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">SOAT hasta</label>
+                    <input type="date" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.soat_until} onChange={e => setFormData({...formData, soat_until: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Tecno hasta</label>
+                    <input type="date" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.techno_until} onChange={e => setFormData({...formData, techno_until: e.target.value})} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Teléfono</label>
+                    <input type="tel" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">WhatsApp</label>
+                    <input type="tel" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} />
+                  </div>
+                </div>
+              </div>
+
               <button type="submit" className="w-full bg-red-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all">
                 Publicar Vehículo
               </button>
@@ -420,9 +494,8 @@ function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
 
   const handleGoogleLogin = async () => {
     try {
@@ -459,92 +532,135 @@ function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-md rounded-[40px] p-10 relative shadow-2xl overflow-y-auto max-h-[90vh]">
-        <button 
-          onClick={onClose}
-          className="absolute top-6 right-6 p-2 hover:bg-zinc-100 rounded-full transition-colors"
-        >
-          <X className="w-6 h-6 text-zinc-400" />
-        </button>
-
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-600/20">
-            <User className="text-white w-8 h-8" />
-          </div>
-          <h2 className="text-3xl font-black text-zinc-900 mb-2">
-            {isSignUp ? "Crea tu cuenta" : "Bienvenido"}
-          </h2>
-          <p className="text-zinc-500">
-            {isSignUp ? "Únete a la comunidad de Autosya" : "Inicia sesión para continuar"}
-          </p>
-        </div>
-
-        <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
-          <div>
-            <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Correo Electrónico</label>
-            <input 
-              required 
-              type="email" 
-              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600" 
-              placeholder="tu@email.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Contraseña</label>
-            <input 
-              required 
-              type="password" 
-              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600" 
-              placeholder="••••••••"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
-          <button 
-            disabled={loading}
-            type="submit" 
-            className="w-full bg-zinc-900 text-white py-4 rounded-2xl font-bold transition-all hover:bg-black disabled:opacity-50"
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+            onClick={onClose} 
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="bg-white w-full max-w-md rounded-[40px] p-10 relative shadow-2xl overflow-y-auto max-h-[90vh]"
           >
-            {loading ? "Procesando..." : (isSignUp ? "Registrarse" : "Iniciar Sesión")}
-          </button>
-        </form>
+            <button 
+              onClick={onClose}
+              className="absolute top-6 right-6 p-2 hover:bg-zinc-100 rounded-full transition-colors"
+            >
+              <X className="w-6 h-6 text-zinc-400" />
+            </button>
 
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-100"></div></div>
-          <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-zinc-400 font-bold">O continúa con</span></div>
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-600/20">
+                <User className="text-white w-8 h-8" />
+              </div>
+              <h2 className="text-3xl font-black text-zinc-900 mb-2">
+                {isSignUp ? "Crea tu cuenta" : "Bienvenido"}
+              </h2>
+              <p className="text-zinc-500">
+                {isSignUp ? "Únete a la comunidad de Autosya" : "Inicia sesión para continuar"}
+              </p>
+            </div>
+
+            <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Correo Electrónico</label>
+                <input 
+                  required 
+                  type="email" 
+                  className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600" 
+                  placeholder="tu@email.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Contraseña</label>
+                <div className="relative">
+                  <input 
+                    required 
+                    type={showPassword ? "text" : "password"} 
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 pr-12 focus:ring-2 focus:ring-red-600" 
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+              <button 
+                disabled={loading}
+                type="submit" 
+                className="w-full bg-zinc-900 text-white py-4 rounded-2xl font-bold transition-all hover:bg-black disabled:opacity-50"
+              >
+                {loading ? "Procesando..." : (isSignUp ? "Registrarse" : "Iniciar Sesión")}
+              </button>
+            </form>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-100"></div></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-zinc-400 font-bold">O continúa con</span></div>
+            </div>
+
+            <button
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-4 bg-white border-2 border-zinc-100 hover:border-zinc-200 py-4 rounded-2xl font-bold text-zinc-700 transition-all hover:shadow-md active:scale-[0.98]"
+            >
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+              Google
+            </button>
+
+            <p className="mt-8 text-center text-sm text-zinc-500">
+              {isSignUp ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
+              <button 
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-red-600 font-bold hover:underline"
+              >
+                {isSignUp ? "Inicia Sesión" : "Regístrate gratis"}
+              </button>
+            </p>
+          </motion.div>
         </div>
-
-        <button
-          onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-4 bg-white border-2 border-zinc-100 hover:border-zinc-200 py-4 rounded-2xl font-bold text-zinc-700 transition-all hover:shadow-md active:scale-[0.98]"
-        >
-          <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-          Google
-        </button>
-
-        <p className="mt-8 text-center text-sm text-zinc-500">
-          {isSignUp ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
-          <button 
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-red-600 font-bold hover:underline"
-          >
-            {isSignUp ? "Inicia Sesión" : "Regístrate gratis"}
-          </button>
-        </p>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
 
-function Navbar() {
+function Navbar({ inventory }: { inventory: Car[] }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isBrandsDrawerOpen, setIsBrandsDrawerOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Car[]>([]);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (searchQuery.trim().length > 0) {
+      const filtered = inventory.filter(car => 
+        car.make.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        car.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        car.year.toString().includes(searchQuery)
+      ).slice(0, 5); // Limit to 5 results for the dropdown
+      setSearchResults(filtered);
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery, inventory]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -558,6 +674,7 @@ function Navbar() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (!session) setIsUserMenuOpen(false);
     });
 
     const handleOpenLogin = () => setIsLoginModalOpen(true);
@@ -572,6 +689,16 @@ function Navbar() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setIsUserMenuOpen(false);
+  };
+
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/inventory?search=${encodeURIComponent(searchQuery)}`);
+      setIsSearchFocused(false);
+      setIsMobileMenuOpen(false);
+    }
   };
 
   return (
@@ -595,18 +722,106 @@ function Navbar() {
           </Link>
 
           {/* Search Bar - Desktop */}
-          <div className="hidden md:flex flex-1 max-w-2xl items-center">
+          <form 
+            onSubmit={handleSearchSubmit}
+            className="hidden md:flex flex-1 max-w-2xl items-center relative"
+          >
             <div className="relative w-full flex">
               <input 
                 type="text" 
                 placeholder="Busca tu auto..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
                 className="w-full border-2 border-red-600 rounded-l-md px-4 py-2 focus:outline-none focus:ring-0 text-zinc-900"
               />
-              <button className="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700 transition-colors">
+              {searchQuery && (
+                <button 
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-14 top-1/2 -translate-y-1/2 p-1 hover:bg-zinc-100 rounded-full transition-colors"
+                >
+                  <X className="w-4 h-4 text-zinc-400" />
+                </button>
+              )}
+              <button 
+                type="submit"
+                className="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700 transition-colors"
+              >
                 <Search className="w-5 h-5" />
               </button>
             </div>
-          </div>
+
+            {/* Search Results Dropdown */}
+            <AnimatePresence>
+              {isSearchFocused && searchQuery.trim().length > 0 && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsSearchFocused(false)} />
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-zinc-100 overflow-hidden z-20"
+                  >
+                    <div className="p-4 border-b border-zinc-50 flex items-center justify-between bg-zinc-50/50">
+                      <span className="text-sm font-bold text-zinc-600">{searchResults.length} Resultados</span>
+                      <div className="flex gap-2">
+                        <button className="p-1 hover:bg-white rounded border border-zinc-200"><ChevronLeft className="w-4 h-4" /></button>
+                        <button className="p-1 hover:bg-white rounded border border-zinc-200"><ChevronRight className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                    
+                    <div className="divide-y divide-zinc-50">
+                      {searchResults.length > 0 ? (
+                        searchResults.map((car) => (
+                          <Link
+                            key={car.id}
+                            to={`/car/${car.id}`}
+                            onClick={() => {
+                              setIsSearchFocused(false);
+                              setSearchQuery("");
+                            }}
+                            className="flex items-center gap-4 p-4 hover:bg-zinc-50 transition-colors group"
+                          >
+                            <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-100">
+                              <img 
+                                src={car.image_url} 
+                                alt={car.model} 
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-zinc-900 truncate group-hover:text-red-600 transition-colors">
+                                {car.make} {car.model} {car.year} {car.transmission === 'Automatic' ? 'automático' : 'mecánico'}
+                              </h4>
+                              <div className="text-red-600 font-black text-lg">$ {car.price.toLocaleString()}</div>
+                              <div className="flex gap-3 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                                <span>Kilometraje: {car.mileage.toLocaleString()}</span>
+                                <span>Combustible: {car.fuel_type === 'Gasoline' ? 'Gasolina' : 'Diesel'}</span>
+                              </div>
+                            </div>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center text-zinc-400 italic">No se encontraron resultados</div>
+                      )}
+                    </div>
+
+                    <Link 
+                      to="/inventory" 
+                      onClick={() => {
+                        setIsSearchFocused(false);
+                        setSearchQuery("");
+                      }}
+                      className="block p-4 text-center text-red-600 font-bold hover:bg-red-50 transition-colors border-t border-zinc-100"
+                    >
+                      Ver todos los resultados
+                    </Link>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </form>
 
           {/* Right Actions */}
           <div className="flex items-center gap-4 md:gap-8">
@@ -626,18 +841,64 @@ function Navbar() {
             </Link>
 
             {user ? (
-              <div className="flex items-center gap-2">
+              <div className="relative">
                 <button 
-                  onClick={handleLogout}
-                  className="w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-100 hover:border-red-600 transition-all"
-                  title="Cerrar Sesión"
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center gap-2 p-1 pr-3 rounded-full border-2 border-zinc-100 hover:border-red-600 transition-all bg-white"
                 >
-                  <img 
-                    src={user.user_metadata.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=ef4444&color=fff`} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                  />
+                  <div className="w-8 h-8 rounded-full overflow-hidden">
+                    <img 
+                      src={user.user_metadata.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=ef4444&color=fff`} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <ChevronDown className={cn("w-4 h-4 text-zinc-400 transition-transform", isUserMenuOpen && "rotate-180")} />
                 </button>
+
+                <AnimatePresence>
+                  {isUserMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setIsUserMenuOpen(false)} />
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 mt-3 w-64 bg-white rounded-3xl shadow-2xl border border-zinc-100 overflow-hidden z-20"
+                      >
+                        <div className="p-6 border-b border-zinc-100 bg-zinc-50/50">
+                          <div className="font-bold text-zinc-900 truncate">{user.email}</div>
+                          <div className="text-xs text-zinc-400 mt-1 uppercase tracking-widest font-bold">Usuario Premium</div>
+                        </div>
+                        <div className="p-2">
+                          {[
+                            { icon: Heart, label: "Mis Favoritos", path: "/favorites" },
+                            { icon: History, label: "Mis Publicaciones", path: "/my-listings" },
+                            { icon: Settings, label: "Configuración", path: "/settings" },
+                          ].map((item, i) => (
+                            <Link 
+                              key={i}
+                              to={item.path}
+                              onClick={() => setIsUserMenuOpen(false)}
+                              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-600 hover:bg-zinc-50 hover:text-red-600 transition-all text-sm font-medium"
+                            >
+                              <item.icon className="w-4 h-4" />
+                              {item.label}
+                            </Link>
+                          ))}
+                          <div className="h-px bg-zinc-100 my-2 mx-2" />
+                          <button 
+                            onClick={handleLogout}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:bg-red-50 hover:text-red-600 transition-all text-sm font-bold"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            Cerrar Sesión
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
             ) : (
               <button
@@ -660,84 +921,356 @@ function Navbar() {
       </nav>
 
       {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-[60] bg-white p-6 flex flex-col gap-6">
-          <div className="flex justify-between items-center">
-            <img 
-              src="/logo.png" 
-              alt="Logo" 
-              className="h-10" 
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                e.currentTarget.src = "https://ui-avatars.com/api/?name=Autosya&background=ef4444&color=fff";
-              }}
-            />
-            <button onClick={() => setIsMobileMenuOpen(false)}><X className="w-8 h-8 text-zinc-900" /></button>
-          </div>
-          <div className="flex flex-col gap-4">
-            <div className="relative flex">
-              <input 
-                type="text" 
-                placeholder="Busca tu auto..." 
-                className="w-full border-2 border-red-600 rounded-l-md px-4 py-2 text-zinc-900"
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div 
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[60] bg-white p-6 flex flex-col gap-6"
+          >
+            <div className="flex justify-between items-center">
+              <img 
+                src="/logo.png" 
+                alt="Logo" 
+                className="h-10" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.src = "https://ui-avatars.com/api/?name=Autosya&background=ef4444&color=fff";
+                }}
               />
-              <button className="bg-red-600 text-white px-4 py-2 rounded-r-md">
-                <Search className="w-5 h-5" />
-              </button>
+              <button onClick={() => setIsMobileMenuOpen(false)}><X className="w-8 h-8 text-zinc-900" /></button>
             </div>
-            {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
-              <Link
-                key={item}
-                to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-xl font-bold text-zinc-900 border-b pb-2"
+            <div className="flex flex-col gap-4 overflow-y-auto">
+              <form 
+                onSubmit={handleSearchSubmit}
+                className="relative flex flex-col gap-2"
               >
-                {item}
-              </Link>
-            ))}
-            <button 
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                setIsBrandsDrawerOpen(true);
-              }}
-              className="text-xl font-bold text-zinc-900 border-b pb-2 text-left"
-            >
-              Marcas
-            </button>
-            {!user && (
-              <button
+                <div className="relative flex">
+                  <input 
+                    type="text" 
+                    placeholder="Busca tu auto..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full border-2 border-red-600 rounded-l-md px-4 py-2 text-zinc-900"
+                  />
+                  <button 
+                    type="submit"
+                    className="bg-red-600 text-white px-4 py-2 rounded-r-md"
+                  >
+                    <Search className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Mobile Search Results */}
+                {searchQuery.trim().length > 0 && (
+                  <div className="bg-zinc-50 rounded-xl border border-zinc-100 overflow-hidden">
+                    <div className="p-3 border-b border-zinc-200 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                      {searchResults.length} Resultados
+                    </div>
+                    <div className="divide-y divide-zinc-200">
+                      {searchResults.map((car) => (
+                        <Link
+                          key={car.id}
+                          to={`/car/${car.id}`}
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            setSearchQuery("");
+                          }}
+                          className="flex items-center gap-3 p-3 hover:bg-white transition-colors"
+                        >
+                          <img src={car.image_url} className="w-16 h-10 object-cover rounded" alt={car.model} />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-zinc-900 truncate">{car.make} {car.model}</div>
+                            <div className="text-red-600 font-black text-sm">$ {car.price.toLocaleString()}</div>
+                          </div>
+                        </Link>
+                      ))}
+                      <Link 
+                        to="/inventory"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          setSearchQuery("");
+                        }}
+                        className="block p-3 text-center text-xs font-bold text-red-600"
+                      >
+                        Ver todos
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </form>
+              {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
+                <Link
+                  key={item}
+                  to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="text-xl font-bold text-zinc-900 border-b pb-2"
+                >
+                  {item}
+                </Link>
+              ))}
+              <button 
                 onClick={() => {
                   setIsMobileMenuOpen(false);
-                  setIsLoginModalOpen(true);
+                  setIsBrandsDrawerOpen(true);
                 }}
-                className="bg-zinc-900 text-white text-center py-3 rounded-xl font-bold"
+                className="text-xl font-bold text-zinc-900 border-b pb-2 text-left"
               >
-                Iniciar Sesión
+                Marcas
               </button>
-            )}
-            {user && (
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  handleLogout();
-                }}
-                className="bg-red-50 text-red-600 text-center py-3 rounded-xl font-bold"
-              >
-                Cerrar Sesión
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+              {!user && (
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    setIsLoginModalOpen(true);
+                  }}
+                  className="bg-zinc-900 text-white text-center py-3 rounded-xl font-bold"
+                >
+                  Iniciar Sesión
+                </button>
+              )}
+              {user && (
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="bg-red-50 text-red-600 text-center py-3 rounded-xl font-bold"
+                >
+                  Cerrar Sesión
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
       <BrandsDrawer isOpen={isBrandsDrawerOpen} onClose={() => setIsBrandsDrawerOpen(false)} />
     </>
   );
 }
 
-function CarCard({ car }: { car: Car; key?: React.Key }) {
+function Favorites({ inventory, favorites, onToggleFavorite }: { inventory: Car[], favorites: number[], onToggleFavorite: (id: number) => void }) {
+  const favoriteCars = inventory.filter(car => favorites.includes(car.id));
+
   return (
-    <div className="group bg-white rounded-3xl overflow-hidden border border-zinc-100 shadow-sm hover:shadow-2xl hover:shadow-black/5 transition-all duration-500">
+    <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-12">
+          <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4">MIS FAVORITOS</h1>
+          <p className="text-zinc-500 font-medium">Tus vehículos guardados para ver más tarde.</p>
+        </div>
+
+        {favoriteCars.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {favoriteCars.map(car => (
+              <CarCard 
+                key={car.id} 
+                car={car} 
+                isFavorite={true} 
+                onToggleFavorite={onToggleFavorite} 
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-[32px] p-20 text-center border border-dashed border-zinc-200">
+            <Heart className="w-16 h-16 text-zinc-200 mx-auto mb-6" />
+            <h3 className="text-xl font-bold text-zinc-900 mb-2">No tienes favoritos aún</h3>
+            <p className="text-zinc-500">Explora nuestro inventario y guarda los carros que más te gusten.</p>
+            <Link to="/inventory" className="inline-block mt-8 bg-red-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-red-700 transition-colors">
+              Ir al Inventario
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MyListings({ inventory, favorites, onToggleFavorite }: { inventory: Car[]; favorites: number[]; onToggleFavorite: (id: number) => void }) {
+  const [user, setUser] = useState<any>(null);
+  
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+  }, []);
+
+  const myListings = inventory.filter(car => car.user_id === user?.id);
+
+  return (
+    <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-12">
+          <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4">MIS PUBLICACIONES</h1>
+          <p className="text-zinc-500 font-medium">Gestiona los vehículos que has puesto a la venta.</p>
+        </div>
+
+        {myListings.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {myListings.map(car => (
+              <CarCard 
+                key={car.id} 
+                car={car} 
+                isFavorite={favorites.includes(car.id)} 
+                onToggleFavorite={onToggleFavorite} 
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-[32px] p-20 text-center border border-dashed border-zinc-200">
+            <CarIcon className="w-16 h-16 text-zinc-200 mx-auto mb-6" />
+            <h3 className="text-xl font-bold text-zinc-900 mb-2">No tienes publicaciones</h3>
+            <p className="text-zinc-500">¿Quieres vender tu carro? Publícalo gratis con nosotros.</p>
+            <Link to="/sell" className="inline-block mt-8 bg-red-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-red-700 transition-colors">
+              Publicar Ahora
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SettingsPage() {
+  const [user, setUser] = useState<any>(null);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+  
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+  }, []);
+
+  const handleMigration = async () => {
+    if (!user) return;
+    setIsMigrating(true);
+    setMigrationStatus("Migrando anuncios...");
+    try {
+      await migrateAds(user.id);
+      setMigrationStatus("¡Migración completada con éxito!");
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (error: any) {
+      console.error(error);
+      setMigrationStatus(`Error: ${error.message || "No se pudo conectar con la base de datos"}`);
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
+  const handleRevert = async () => {
+    if (!user) return;
+    if (!confirm("¿Estás seguro de que deseas revertir la migración? Esto eliminará todos los anuncios importados.")) return;
+    setIsMigrating(true);
+    setMigrationStatus("Revirtiendo migración...");
+    try {
+      await revertMigration();
+      setMigrationStatus("¡Migración revertida con éxito!");
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (error) {
+      console.error(error);
+      setMigrationStatus("Error al revertir la migración.");
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
+  return (
+    <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
+      <div className="max-w-3xl mx-auto">
+        <div className="mb-12">
+          <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4">CONFIGURACIÓN</h1>
+          <p className="text-zinc-500 font-medium">Gestiona tu cuenta y preferencias.</p>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[32px] shadow-sm border border-zinc-100">
+            <h3 className="text-xl font-bold text-zinc-900 mb-6">Perfil de Usuario</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Correo Electrónico</label>
+                <div className="p-4 bg-zinc-50 rounded-2xl text-zinc-900 font-medium">{user?.email}</div>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">ID de Usuario</label>
+                <div className="p-4 bg-zinc-50 rounded-2xl text-zinc-400 font-mono text-xs">{user?.id}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-[32px] shadow-sm border border-zinc-100">
+            <h3 className="text-xl font-bold text-zinc-900 mb-6">Preferencias</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl">
+                <span className="font-medium text-zinc-900">Notificaciones por Correo</span>
+                <div className="w-12 h-6 bg-red-600 rounded-full relative">
+                  <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl">
+                <span className="font-medium text-zinc-900">Modo Oscuro</span>
+                <div className="w-12 h-6 bg-zinc-200 rounded-full relative">
+                  <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {user?.email?.toLowerCase() === "autosyacucuta@gmail.com" && (
+            <div className="bg-white p-8 rounded-[32px] shadow-sm border border-zinc-100">
+              <h3 className="text-xl font-bold text-zinc-900 mb-2">Migración de Datos</h3>
+              <p className="text-zinc-500 text-sm mb-6">Importa los anuncios del sitio anterior a tu cuenta actual.</p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={handleMigration}
+                  disabled={isMigrating}
+                  className={cn(
+                    "flex-1 py-4 rounded-2xl font-bold transition-all",
+                    isMigrating ? "bg-zinc-100 text-zinc-400 cursor-not-allowed" : "bg-black text-white hover:bg-zinc-800"
+                  )}
+                >
+                  {isMigrating ? "Procesando..." : "Iniciar Importación"}
+                </button>
+                <button 
+                  onClick={handleRevert}
+                  disabled={isMigrating}
+                  className={cn(
+                    "flex-1 py-4 rounded-2xl font-bold transition-all border-2",
+                    isMigrating ? "border-zinc-100 text-zinc-400 cursor-not-allowed" : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+                  )}
+                >
+                  Revertir
+                </button>
+              </div>
+              {migrationStatus && (
+                <p className="mt-4 text-center text-sm font-bold text-red-600">{migrationStatus}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+function CarCard({ car, isFavorite, onToggleFavorite }: { car: Car; isFavorite?: boolean; onToggleFavorite?: (id: number) => void; key?: any }) {
+  return (
+    <div className="group bg-white rounded-3xl overflow-hidden border border-zinc-100 shadow-sm hover:shadow-2xl hover:shadow-black/5 transition-all duration-500 relative">
+      <button 
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggleFavorite?.(car.id);
+        }}
+        className={cn(
+          "absolute top-4 right-4 z-10 p-2 rounded-full backdrop-blur-md transition-all",
+          isFavorite ? "bg-red-600 text-white shadow-lg shadow-red-600/20" : "bg-white/80 text-zinc-400 hover:text-red-600"
+        )}
+      >
+        <Heart className={cn("w-5 h-5", isFavorite && "fill-current")} />
+      </button>
       <Link to={`/car/${car.id}`}>
         <div className="relative aspect-[16/10] overflow-hidden">
           <img
@@ -781,7 +1314,7 @@ function CarCard({ car }: { car: Car; key?: React.Key }) {
   );
 }
 
-function Home() {
+function Home({ favorites, onToggleFavorite }: { favorites: number[], onToggleFavorite: (id: number) => void }) {
   const [cars, setCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -885,7 +1418,14 @@ function Home() {
                 <div key={i} className="h-96 bg-zinc-100 rounded-3xl animate-pulse" />
               ))
             ) : (
-              cars.map(car => <CarCard key={car.id} car={car} />)
+              cars.map(car => (
+                <CarCard 
+                  key={car.id} 
+                  car={car} 
+                  isFavorite={favorites.includes(car.id)}
+                  onToggleFavorite={onToggleFavorite}
+                />
+              ))
             )}
           </div>
         </div>
@@ -944,12 +1484,20 @@ function Home() {
   );
 }
 
-function Inventory() {
+function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onToggleFavorite: (id: number) => void }) {
   const [cars, setCars] = useState<Car[]>([]);
   const [filteredCars, setFilteredCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get("search") || "");
   const [makeFilter, setMakeFilter] = useState("All");
+
+  useEffect(() => {
+    const querySearch = searchParams.get("search");
+    if (querySearch !== null) {
+      setSearch(querySearch);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     async function fetchCars() {
@@ -1047,7 +1595,14 @@ function Inventory() {
               </div>
             ) : filteredCars.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {filteredCars.map(car => <CarCard key={car.id} car={car} />)}
+                {filteredCars.map(car => (
+                  <CarCard 
+                    key={car.id} 
+                    car={car} 
+                    isFavorite={favorites.includes(car.id)}
+                    onToggleFavorite={onToggleFavorite}
+                  />
+                ))}
               </div>
             ) : (
               <div className="bg-white rounded-[32px] p-20 text-center border border-dashed border-zinc-200">
@@ -1063,7 +1618,7 @@ function Inventory() {
   );
 }
 
-function CarDetail() {
+function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onToggleFavorite: (id: number) => void }) {
   const { id } = useParams();
   const [car, setCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1114,9 +1669,20 @@ function CarDetail() {
                 <span className="bg-zinc-100 px-4 py-1 rounded-full text-xs font-bold text-zinc-600">{car.year}</span>
                 <span className="bg-red-100 px-4 py-1 rounded-full text-xs font-bold text-red-600">Usado Certificado</span>
               </div>
-              <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-2 uppercase">
-                {car.make} <span className="text-red-600">{car.model}</span>
-              </h1>
+              <div className="flex items-center justify-between gap-4 mb-2">
+                <h1 className="text-5xl font-black text-zinc-900 tracking-tight uppercase">
+                  {car.make} <span className="text-red-600">{car.model}</span>
+                </h1>
+                <button 
+                  onClick={() => onToggleFavorite(car.id)}
+                  className={cn(
+                    "p-4 rounded-2xl transition-all shadow-xl",
+                    favorites.includes(car.id) ? "bg-red-600 text-white shadow-red-600/20" : "bg-zinc-50 text-zinc-400 hover:text-red-600"
+                  )}
+                >
+                  <Heart className={cn("w-6 h-6", favorites.includes(car.id) && "fill-current")} />
+                </button>
+              </div>
               <p className="text-3xl font-bold text-zinc-900">${car.price.toLocaleString()}</p>
             </div>
 
@@ -1125,7 +1691,7 @@ function CarDetail() {
                 { label: "Kilometraje", value: `${car.mileage.toLocaleString()} km` },
                 { label: "Transmisión", value: car.transmission === "Automatic" ? "Automática" : "Manual" },
                 { label: "Combustible", value: car.fuel_type === "Gasoline" ? "Gasolina" : car.fuel_type === "Diesel" ? "Diesel" : car.fuel_type },
-                { label: "Motor", value: "3.0L Turbo" }
+                { label: "Motor", value: car.engine || "No especificado" }
               ].map((spec, i) => (
                 <div key={i} className="bg-zinc-50 p-6 rounded-3xl border border-zinc-100">
                   <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold mb-1">{spec.label}</div>
@@ -1133,6 +1699,38 @@ function CarDetail() {
                 </div>
               ))}
             </div>
+
+            {(car.plate || car.color || car.soat_until || car.techno_until) && (
+              <div className="mb-10 p-8 bg-zinc-50 rounded-[40px] border border-zinc-100">
+                <h3 className="text-sm font-bold text-zinc-900 mb-6 uppercase tracking-widest">Ficha Técnica</h3>
+                <div className="grid grid-cols-2 gap-y-4 text-sm">
+                  {car.plate && (
+                    <>
+                      <div className="text-zinc-400">Placa</div>
+                      <div className="font-bold text-zinc-900 text-right">{car.plate} {car.plate_city ? `(${car.plate_city})` : ""}</div>
+                    </>
+                  )}
+                  {car.color && (
+                    <>
+                      <div className="text-zinc-400">Color</div>
+                      <div className="font-bold text-zinc-900 text-right capitalize">{car.color}</div>
+                    </>
+                  )}
+                  {car.soat_until && (
+                    <>
+                      <div className="text-zinc-400">SOAT Vigente hasta</div>
+                      <div className="font-bold text-zinc-900 text-right">{car.soat_until}</div>
+                    </>
+                  )}
+                  {car.techno_until && (
+                    <>
+                      <div className="text-zinc-400">Tecnomecánica hasta</div>
+                      <div className="font-bold text-zinc-900 text-right">{car.techno_until}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="mb-10">
               <h3 className="text-xl font-bold text-zinc-900 mb-4">Descripción</h3>
@@ -1143,12 +1741,20 @@ function CarDetail() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <button className="flex-1 bg-black text-white py-5 rounded-2xl font-bold text-lg hover:bg-zinc-800 transition-all flex items-center justify-center gap-2">
+              <a 
+                href={`tel:${car.phone || "573000000000"}`}
+                className="flex-1 bg-black text-white py-5 rounded-2xl font-bold text-lg hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 text-center"
+              >
                 <Phone className="w-5 h-5" /> Contactar Vendedor
-              </button>
-              <button className="flex-1 bg-red-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all flex items-center justify-center gap-2">
-                <Mail className="w-5 h-5" /> Consultar Ahora
-              </button>
+              </a>
+              <a 
+                href={`https://wa.me/${car.whatsapp?.replace(/\D/g, '') || "573000000000"}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 bg-red-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all flex items-center justify-center gap-2 text-center"
+              >
+                <MessageCircle className="w-5 h-5" /> WhatsApp
+              </a>
             </div>
           </div>
         </div>
@@ -1270,6 +1876,20 @@ function ConfigError() {
 export default function App() {
   const [inventory, setInventory] = useState<Car[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<number[]>(() => {
+    const saved = localStorage.getItem('autosya_favorites');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('autosya_favorites', JSON.stringify(favorites));
+  }, [favorites]);
+
+  const toggleFavorite = (id: number) => {
+    setFavorites(prev => 
+      prev.includes(id) ? prev.filter(fid => fid !== id) : [...prev, id]
+    );
+  };
 
   useEffect(() => {
     console.log("App mounted, checking config...");
@@ -1315,13 +1935,16 @@ export default function App() {
   return (
     <Router>
       <div className="font-sans selection:bg-red-600/30">
-        <Navbar />
+        <Navbar inventory={inventory} />
         <main>
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/inventory" element={<Inventory />} />
-            <Route path="/car/:id" element={<CarDetail />} />
+            <Route path="/" element={<Home favorites={favorites} onToggleFavorite={toggleFavorite} />} />
+            <Route path="/inventory" element={<Inventory favorites={favorites} onToggleFavorite={toggleFavorite} />} />
+            <Route path="/car/:id" element={<CarDetail favorites={favorites} onToggleFavorite={toggleFavorite} />} />
             <Route path="/sell" element={<SellCar />} />
+            <Route path="/favorites" element={<Favorites inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} />} />
+            <Route path="/my-listings" element={<MyListings inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
         <Footer />
