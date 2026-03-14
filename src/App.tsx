@@ -1,6 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from "react-router-dom";
-import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle } from "lucide-react";
+import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut } from "lucide-react";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
@@ -101,6 +101,8 @@ function AIAssistant({ inventory }: { inventory: Car[] }) {
 }
 
 function SellCar() {
+  const [user, setUser] = useState<any>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [formData, setFormData] = useState({
     make: "", model: "", year: "", price: "", mileage: "", 
     transmission: "Automatic", fuel_type: "Gasoline", image_url: "", description: ""
@@ -108,6 +110,13 @@ function SellCar() {
   const [isEstimating, setIsEstimating] = useState(false);
   const [estimate, setEstimate] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoadingUser(false);
+    });
+  }, []);
 
   const handleEstimate = async () => {
     if (!formData.make || !formData.model) return alert("Por favor ingresa marca y modelo primero");
@@ -124,13 +133,16 @@ function SellCar() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!user) return alert("Debes iniciar sesión para publicar un vehículo.");
+
     const { data, error } = await supabase
       .from("cars")
       .insert([{
         ...formData,
         year: parseInt(formData.year),
         price: parseInt(formData.price),
-        mileage: parseInt(formData.mileage)
+        mileage: parseInt(formData.mileage),
+        user_id: user.id
       }])
       .select()
       .single();
@@ -142,6 +154,28 @@ function SellCar() {
       navigate("/inventory");
     }
   };
+
+  if (loadingUser) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div></div>;
+
+  if (!user) {
+    return (
+      <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white p-12 rounded-[40px] shadow-xl border border-zinc-100 text-center">
+          <div className="w-20 h-20 bg-zinc-100 rounded-3xl flex items-center justify-center mx-auto mb-8">
+            <Shield className="w-10 h-10 text-zinc-400" />
+          </div>
+          <h2 className="text-3xl font-black text-zinc-900 mb-4">Acceso Restringido</h2>
+          <p className="text-zinc-500 mb-10">Debes iniciar sesión para poder publicar tu vehículo en nuestra plataforma.</p>
+          <button 
+            onClick={() => window.dispatchEvent(new CustomEvent('open-login'))}
+            className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-emerald-600 transition-all"
+          >
+            Iniciar Sesión Ahora
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
@@ -246,85 +280,281 @@ function SellCar() {
     </div>
   );
 }
+function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      alert("Error al iniciar sesión: " + error.message);
+    }
+  };
+
+  const handleEmailAuth = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        alert("¡Registro exitoso! Por favor verifica tu correo electrónico.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+      onClose();
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-md rounded-[40px] p-10 relative shadow-2xl overflow-y-auto max-h-[90vh]">
+        <button 
+          onClick={onClose}
+          className="absolute top-6 right-6 p-2 hover:bg-zinc-100 rounded-full transition-colors"
+        >
+          <X className="w-6 h-6 text-zinc-400" />
+        </button>
+
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
+            <User className="text-white w-8 h-8" />
+          </div>
+          <h2 className="text-3xl font-black text-zinc-900 mb-2">
+            {isSignUp ? "Crea tu cuenta" : "Bienvenido"}
+          </h2>
+          <p className="text-zinc-500">
+            {isSignUp ? "Únete a la comunidad de Autosya" : "Inicia sesión para continuar"}
+          </p>
+        </div>
+
+        <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
+          <div>
+            <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Correo Electrónico</label>
+            <input 
+              required 
+              type="email" 
+              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-emerald-500" 
+              placeholder="tu@email.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Contraseña</label>
+            <input 
+              required 
+              type="password" 
+              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-emerald-500" 
+              placeholder="••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+          </div>
+          <button 
+            disabled={loading}
+            type="submit" 
+            className="w-full bg-zinc-900 text-white py-4 rounded-2xl font-bold transition-all hover:bg-black disabled:opacity-50"
+          >
+            {loading ? "Procesando..." : (isSignUp ? "Registrarse" : "Iniciar Sesión")}
+          </button>
+        </form>
+
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-100"></div></div>
+          <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-zinc-400 font-bold">O continúa con</span></div>
+        </div>
+
+        <button
+          onClick={handleGoogleLogin}
+          className="w-full flex items-center justify-center gap-4 bg-white border-2 border-zinc-100 hover:border-zinc-200 py-4 rounded-2xl font-bold text-zinc-700 transition-all hover:shadow-md active:scale-[0.98]"
+        >
+          <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+          Google
+        </button>
+
+        <p className="mt-8 text-center text-sm text-zinc-500">
+          {isSignUp ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
+          <button 
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="text-emerald-600 font-bold hover:underline"
+          >
+            {isSignUp ? "Inicia Sesión" : "Regístrate gratis"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    const handleOpenLogin = () => setIsLoginModalOpen(true);
+    window.addEventListener('open-login', handleOpenLogin);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener('open-login', handleOpenLogin);
+      subscription.unsubscribe();
+    };
   }, []);
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   return (
-    <nav className={cn(
-      "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-6 py-4",
-      isScrolled ? "bg-white/80 backdrop-blur-md shadow-sm" : "bg-transparent"
-    )}>
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <CarIcon className="text-white w-6 h-6" />
+    <>
+      <nav className={cn(
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-6 py-4",
+        isScrolled ? "bg-white/80 backdrop-blur-md shadow-sm" : "bg-transparent"
+      )}>
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2 group">
+            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <CarIcon className="text-white w-6 h-6" />
+            </div>
+            <span className={cn(
+              "text-xl font-bold tracking-tight",
+              isScrolled ? "text-black" : "text-white"
+            )}>
+              Autosya
+            </span>
+          </Link>
+
+          <div className="hidden md:flex items-center gap-8">
+            {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
+              <Link
+                key={item}
+                to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
+                className={cn(
+                  "text-sm font-medium transition-colors hover:text-emerald-500",
+                  isScrolled ? "text-zinc-600" : "text-white/80"
+                )}
+              >
+                {item}
+              </Link>
+            ))}
+            
+            {user ? (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 bg-zinc-100/50 p-1 pr-3 rounded-full border border-zinc-200">
+                  <img 
+                    src={user.user_metadata.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=10b981&color=fff`} 
+                    alt={user.user_metadata.full_name || user.email} 
+                    className="w-8 h-8 rounded-full border border-white"
+                  />
+                  <span className="text-xs font-bold text-zinc-700">
+                    {(user.user_metadata.full_name || user.email).split(' ')[0].split('@')[0]}
+                  </span>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className={cn(
+                    "p-2 rounded-full transition-colors hover:bg-red-50 hover:text-red-500",
+                    isScrolled ? "text-zinc-400" : "text-white/60"
+                  )}
+                  title="Cerrar Sesión"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsLoginModalOpen(true)}
+                className={cn(
+                  "text-sm font-bold px-6 py-2.5 rounded-full transition-all border",
+                  isScrolled 
+                    ? "text-zinc-900 border-zinc-200 hover:bg-zinc-50" 
+                    : "text-white border-white/20 hover:bg-white/10"
+                )}
+              >
+                Iniciar Sesión
+              </button>
+            )}
           </div>
-          <span className={cn(
-            "text-xl font-bold tracking-tight",
-            isScrolled ? "text-black" : "text-white"
-          )}>
-            Autosya [ES]
-          </span>
-        </Link>
 
-        <div className="hidden md:flex items-center gap-8">
-          {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
-            <Link
-              key={item}
-              to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
-              className={cn(
-                "text-sm font-medium transition-colors hover:text-emerald-500",
-                isScrolled ? "text-zinc-600" : "text-white/80"
-              )}
-            >
-              {item}
-            </Link>
-          ))}
-          <Link
-            to="/inventory"
-            className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20"
+          <button 
+            className="md:hidden text-white"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            Ver Catálogo
-          </Link>
+            {isMobileMenuOpen ? <X className="text-black" /> : <Menu className={isScrolled ? "text-black" : "text-white"} />}
+          </button>
         </div>
 
-        <button 
-          className="md:hidden text-white"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        >
-          {isMobileMenuOpen ? <X className="text-black" /> : <Menu className={isScrolled ? "text-black" : "text-white"} />}
-        </button>
-      </div>
-
-      {isMobileMenuOpen && (
-        <div className="absolute top-full left-0 right-0 bg-white border-t p-6 md:hidden flex flex-col gap-4 shadow-xl">
-          {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
-            <Link
-              key={item}
-              to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="text-lg font-medium text-zinc-900"
-            >
-              {item}
-            </Link>
-          ))}
-          <Link
-            to="/inventory"
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="bg-emerald-500 text-white text-center py-3 rounded-xl font-bold"
-          >
-            Ver Catálogo
-          </Link>
-        </div>
-      )}
-    </nav>
+        {isMobileMenuOpen && (
+          <div className="absolute top-full left-0 right-0 bg-white border-t p-6 md:hidden flex flex-col gap-4 shadow-xl">
+            {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
+              <Link
+                key={item}
+                to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="text-lg font-medium text-zinc-900"
+              >
+                {item}
+              </Link>
+            ))}
+            {!user && (
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsLoginModalOpen(true);
+                }}
+                className="bg-zinc-900 text-white text-center py-3 rounded-xl font-bold"
+              >
+                Iniciar Sesión
+              </button>
+            )}
+            {user && (
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  handleLogout();
+                }}
+                className="bg-red-50 text-red-600 text-center py-3 rounded-xl font-bold"
+              >
+                Cerrar Sesión
+              </button>
+            )}
+          </div>
+        )}
+      </nav>
+      <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
+    </>
   );
 }
 
@@ -413,7 +643,7 @@ function Home() {
             </span>
             <h1 className="text-6xl md:text-8xl font-black text-white mb-8 tracking-tighter leading-[0.9]">
               CONDUCE TU <br />
-              <span className="text-emerald-500">SUEÑO [ES]</span> HOY.
+              <span className="text-emerald-500">SUEÑO</span> HOY.
             </h1>
             <p className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 font-medium">
               Vive el futuro de la compra de vehículos. Precios transparentes, 
