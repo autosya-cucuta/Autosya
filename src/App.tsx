@@ -1,16 +1,152 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from "react-router-dom";
-import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut } from "lucide-react";
+import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut, ChevronLeft, MessageCircle } from "lucide-react";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { getCarAdvice, estimateCarValue } from "./services/geminiService";
+import { BRANDS_DATA } from "./constants";
 
 // --- Components ---
 
-// function AIAssistant({ inventory }: { inventory: Car[] }) {
-// ... simplified for debug
+function WhatsAppButton() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const contactOptions = [
+    { title: "Para comprar", subtitle: "Ventas", phone: "573000000000" },
+    { title: "Para financiar", subtitle: "Financiacion", phone: "573000000000" },
+    { title: "Para vender", subtitle: "Asesor", phone: "573000000000" },
+  ];
+
+  return (
+    <div className="fixed bottom-8 right-8 z-[70] flex flex-col items-end gap-4">
+      {isOpen && (
+        <div className="w-[320px] bg-white rounded-2xl shadow-2xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {/* Header */}
+          <div className="bg-[#2db742] p-6 text-white">
+            <div className="flex items-center gap-3 mb-2">
+              <MessageCircle className="w-8 h-8 fill-current" />
+              <h3 className="text-lg font-bold">Iniciar una conversacion</h3>
+            </div>
+            <p className="text-xs opacity-90 leading-relaxed">
+              ¡Hola! Haga clic en uno de nuestros miembros a continuación para chatear
+            </p>
+          </div>
+
+          {/* Body */}
+          <div className="p-4 bg-zinc-50/50">
+            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-4 px-2">
+              El equipo suele responder en unos minutos.
+            </p>
+            <div className="space-y-3">
+              {contactOptions.map((option, i) => (
+                <a
+                  key={i}
+                  href={`https://wa.me/${option.phone}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-4 bg-white rounded-xl border-l-4 border-[#2db742] shadow-sm hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-[#2db742]/10 rounded-full flex items-center justify-center">
+                      <MessageCircle className="w-6 h-6 text-[#2db742] fill-current" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-zinc-900">{option.title}</div>
+                      <div className="text-xs text-zinc-400">{option.subtitle}</div>
+                    </div>
+                  </div>
+                  <MessageCircle className="w-5 h-5 text-[#2db742] opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "w-16 h-16 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform group",
+          isOpen ? "bg-[#2db742] text-white" : "bg-[#25D366] text-white"
+        )}
+        title="Contactar por WhatsApp"
+      >
+        {isOpen ? (
+          <X className="w-8 h-8" />
+        ) : (
+          <MessageCircle className="w-8 h-8 fill-current" />
+        )}
+      </button>
+    </div>
+  );
+}
+
+function BrandsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const brand = BRANDS_DATA.find(b => b.name === selectedBrand);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex justify-end">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+          {selectedBrand ? (
+            <button 
+              onClick={() => setSelectedBrand(null)}
+              className="flex items-center gap-2 text-zinc-900 font-bold hover:text-red-600 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              <span>Ir atrás</span>
+            </button>
+          ) : (
+            <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tight">Marcas</h2>
+          )}
+          <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
+            <X className="w-6 h-6 text-zinc-400" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {!selectedBrand ? (
+            <div className="divide-y divide-zinc-50">
+              {BRANDS_DATA.map((brand) => (
+                <button
+                  key={brand.name}
+                  onClick={() => brand.hasModels ? setSelectedBrand(brand.name) : null}
+                  className="w-full p-6 flex items-center justify-between hover:bg-zinc-50 transition-colors group"
+                >
+                  <span className="text-lg font-medium text-zinc-600 group-hover:text-zinc-900">{brand.name}</span>
+                  {brand.hasModels && <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-zinc-900" />}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="p-6">
+              <h3 className="text-3xl font-black text-red-600 uppercase mb-8 tracking-tight">{selectedBrand}</h3>
+              <div className="flex flex-wrap gap-3">
+                {brand?.models?.map((model) => (
+                  <button
+                    key={model.name}
+                    className="flex items-center gap-3 px-4 py-2 bg-white border border-zinc-200 rounded-xl hover:border-red-600 hover:shadow-md transition-all group"
+                  >
+                    <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900">{model.name}</span>
+                    <span className="text-sm font-bold text-zinc-400 group-hover:text-red-600">{model.count}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AIAssistant({ inventory }: { inventory: Car[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([
@@ -42,12 +178,12 @@ function AIAssistant({ inventory }: { inventory: Car[] }) {
         <div className="absolute bottom-20 right-0 w-80 md:w-96 h-[500px] bg-white rounded-[32px] shadow-2xl border border-zinc-100 flex flex-col overflow-hidden">
           <div className="p-6 bg-zinc-900 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center">
                 <Sparkles className="w-6 h-6" />
               </div>
               <div>
                 <div className="font-bold">Asistente IA</div>
-                <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">En línea</div>
+                <div className="text-[10px] text-red-400 font-bold uppercase tracking-widest">En línea</div>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
@@ -59,13 +195,13 @@ function AIAssistant({ inventory }: { inventory: Car[] }) {
                 "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed",
                 m.role === "user" 
                   ? "bg-zinc-100 text-zinc-900 ml-auto rounded-tr-none" 
-                  : "bg-emerald-50 text-emerald-900 rounded-tl-none"
+                  : "bg-red-50 text-red-900 rounded-tl-none"
               )}>
                 {m.text}
               </div>
             ))}
             {isTyping && (
-              <div className="bg-emerald-50 text-emerald-900 p-4 rounded-2xl rounded-tl-none max-w-[85%] text-sm animate-pulse">
+              <div className="bg-red-50 text-red-900 p-4 rounded-2xl rounded-tl-none max-w-[85%] text-sm animate-pulse">
                 Pensando...
               </div>
             )}
@@ -75,14 +211,14 @@ function AIAssistant({ inventory }: { inventory: Car[] }) {
             <input
               type="text"
               placeholder="Pregunta lo que quieras..."
-              className="flex-1 bg-zinc-50 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+              className="flex-1 bg-zinc-50 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-red-600"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
             />
             <button 
               onClick={handleSend}
-              className="bg-emerald-500 text-white p-2 rounded-xl hover:bg-emerald-600 transition-colors"
+              className="bg-red-600 text-white p-2 rounded-xl hover:bg-red-700 transition-colors"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -94,7 +230,7 @@ function AIAssistant({ inventory }: { inventory: Car[] }) {
         onClick={() => setIsOpen(!isOpen)}
         className="w-16 h-16 bg-zinc-900 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform group"
       >
-        <Sparkles className="w-8 h-8 group-hover:text-emerald-400 transition-colors" />
+        <Sparkles className="w-8 h-8 group-hover:text-red-400 transition-colors" />
       </button>
     </div>
   );
@@ -155,7 +291,7 @@ function SellCar() {
     }
   };
 
-  if (loadingUser) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (loadingUser) return <div className="min-h-screen flex items-center justify-center bg-zinc-50"><div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
   if (!user) {
     return (
@@ -168,7 +304,7 @@ function SellCar() {
           <p className="text-zinc-500 mb-10">Debes iniciar sesión para poder publicar tu vehículo en nuestra plataforma.</p>
           <button 
             onClick={() => window.dispatchEvent(new CustomEvent('open-login'))}
-            className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-emerald-600 transition-all"
+            className="w-full bg-red-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all"
           >
             Iniciar Sesión Ahora
           </button>
@@ -248,7 +384,7 @@ function SellCar() {
                 <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Descripción</label>
                 <textarea required rows={4} className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
               </div>
-              <button type="submit" className="w-full bg-emerald-500 text-white py-5 rounded-2xl font-bold text-lg hover:bg-emerald-600 transition-all">
+              <button type="submit" className="w-full bg-red-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all">
                 Publicar Vehículo
               </button>
             </form>
@@ -257,7 +393,7 @@ function SellCar() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-zinc-900 text-white p-8 rounded-[40px] shadow-xl">
               <div className="flex items-center gap-3 mb-6">
-                <Sparkles className="text-emerald-400 w-6 h-6" />
+                <Sparkles className="text-red-400 w-6 h-6" />
                 <h3 className="font-bold">Valoración IA</h3>
               </div>
               <p className="text-zinc-400 text-sm mb-6">Obtén una estimación instantánea del valor de tu carro basada en datos actuales del mercado.</p>
@@ -333,7 +469,7 @@ function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
         </button>
 
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
+          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-600/20">
             <User className="text-white w-8 h-8" />
           </div>
           <h2 className="text-3xl font-black text-zinc-900 mb-2">
@@ -350,7 +486,7 @@ function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             <input 
               required 
               type="email" 
-              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-emerald-500" 
+              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600" 
               placeholder="tu@email.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -361,7 +497,7 @@ function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             <input 
               required 
               type="password" 
-              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-emerald-500" 
+              className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600" 
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -393,7 +529,7 @@ function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
           {isSignUp ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
           <button 
             onClick={() => setIsSignUp(!isSignUp)}
-            className="text-emerald-600 font-bold hover:underline"
+            className="text-red-600 font-bold hover:underline"
           >
             {isSignUp ? "Inicia Sesión" : "Regístrate gratis"}
           </button>
@@ -407,6 +543,7 @@ function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isBrandsDrawerOpen, setIsBrandsDrawerOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -440,94 +577,133 @@ function Navbar() {
   return (
     <>
       <nav className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-6 py-4",
-        isScrolled ? "bg-white/80 backdrop-blur-md shadow-sm" : "bg-transparent"
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-4 py-2",
+        "bg-white shadow-md border-b border-zinc-100"
       )}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <CarIcon className="text-white w-6 h-6" />
-            </div>
-            <span className={cn(
-              "text-xl font-bold tracking-tight",
-              isScrolled ? "text-black" : "text-white"
-            )}>
-              Autosya
-            </span>
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* Logo */}
+          <Link to="/" className="flex-shrink-0">
+            <img 
+              src="/logo.png" 
+              alt="Autosya" 
+              className="h-12 md:h-16 w-auto"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.src = "https://ui-avatars.com/api/?name=Autosya&background=ef4444&color=fff";
+              }}
+            />
           </Link>
 
-          <div className="hidden md:flex items-center gap-8">
-            {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
-              <Link
-                key={item}
-                to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
-                className={cn(
-                  "text-sm font-medium transition-colors hover:text-emerald-500",
-                  isScrolled ? "text-zinc-600" : "text-white/80"
-                )}
-              >
-                {item}
-              </Link>
-            ))}
-            
+          {/* Search Bar - Desktop */}
+          <div className="hidden md:flex flex-1 max-w-2xl items-center">
+            <div className="relative w-full flex">
+              <input 
+                type="text" 
+                placeholder="Busca tu auto..." 
+                className="w-full border-2 border-red-600 rounded-l-md px-4 py-2 focus:outline-none focus:ring-0 text-zinc-900"
+              />
+              <button className="bg-red-600 text-white px-4 py-2 rounded-r-md hover:bg-red-700 transition-colors">
+                <Search className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Right Actions */}
+          <div className="flex items-center gap-4 md:gap-8">
+            <button 
+              onClick={() => setIsBrandsDrawerOpen(true)}
+              className="hidden md:flex flex-col items-center gap-0.5 text-zinc-600 hover:text-red-600 transition-colors"
+            >
+              <Menu className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase">Marcas</span>
+            </button>
+
+            <Link 
+              to="/sell" 
+              className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-red-700 transition-all shadow-md shadow-red-600/20 whitespace-nowrap"
+            >
+              Publica Gratis
+            </Link>
+
             {user ? (
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 bg-zinc-100/50 p-1 pr-3 rounded-full border border-zinc-200">
-                  <img 
-                    src={user.user_metadata.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=10b981&color=fff`} 
-                    alt={user.user_metadata.full_name || user.email} 
-                    className="w-8 h-8 rounded-full border border-white"
-                  />
-                  <span className="text-xs font-bold text-zinc-700">
-                    {(user.user_metadata.full_name || user.email).split(' ')[0].split('@')[0]}
-                  </span>
-                </div>
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={handleLogout}
-                  className={cn(
-                    "p-2 rounded-full transition-colors hover:bg-red-50 hover:text-red-500",
-                    isScrolled ? "text-zinc-400" : "text-white/60"
-                  )}
+                  className="w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-100 hover:border-red-600 transition-all"
                   title="Cerrar Sesión"
                 >
-                  <LogOut className="w-5 h-5" />
+                  <img 
+                    src={user.user_metadata.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=ef4444&color=fff`} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                  />
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setIsLoginModalOpen(true)}
-                className={cn(
-                  "text-sm font-bold px-6 py-2.5 rounded-full transition-all border",
-                  isScrolled 
-                    ? "text-zinc-900 border-zinc-200 hover:bg-zinc-50" 
-                    : "text-white border-white/20 hover:bg-white/10"
-                )}
+                className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 hover:bg-zinc-200 transition-all"
+                title="Iniciar Sesión"
               >
-                Iniciar Sesión
+                <User className="w-6 h-6" />
               </button>
             )}
+
+            <button 
+              className="md:hidden text-zinc-900"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? <X /> : <Menu />}
+            </button>
           </div>
-
-          <button 
-            className="md:hidden text-white"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X className="text-black" /> : <Menu className={isScrolled ? "text-black" : "text-white"} />}
-          </button>
         </div>
+      </nav>
 
-        {isMobileMenuOpen && (
-          <div className="absolute top-full left-0 right-0 bg-white border-t p-6 md:hidden flex flex-col gap-4 shadow-xl">
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[60] bg-white p-6 flex flex-col gap-6">
+          <div className="flex justify-between items-center">
+            <img 
+              src="/logo.png" 
+              alt="Logo" 
+              className="h-10" 
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.src = "https://ui-avatars.com/api/?name=Autosya&background=ef4444&color=fff";
+              }}
+            />
+            <button onClick={() => setIsMobileMenuOpen(false)}><X className="w-8 h-8 text-zinc-900" /></button>
+          </div>
+          <div className="flex flex-col gap-4">
+            <div className="relative flex">
+              <input 
+                type="text" 
+                placeholder="Busca tu auto..." 
+                className="w-full border-2 border-red-600 rounded-l-md px-4 py-2 text-zinc-900"
+              />
+              <button className="bg-red-600 text-white px-4 py-2 rounded-r-md">
+                <Search className="w-5 h-5" />
+              </button>
+            </div>
             {["Inventario", "Vender", "Servicios", "Nosotros"].map((item) => (
               <Link
                 key={item}
                 to={item === "Inventario" ? "/inventory" : `/${item === "Vender" ? "sell" : item === "Servicios" ? "services" : "about"}`}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="text-lg font-medium text-zinc-900"
+                className="text-xl font-bold text-zinc-900 border-b pb-2"
               >
                 {item}
               </Link>
             ))}
+            <button 
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsBrandsDrawerOpen(true);
+              }}
+              className="text-xl font-bold text-zinc-900 border-b pb-2 text-left"
+            >
+              Marcas
+            </button>
             {!user && (
               <button
                 onClick={() => {
@@ -551,9 +727,10 @@ function Navbar() {
               </button>
             )}
           </div>
-        )}
-      </nav>
+        </div>
+      )}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
+      <BrandsDrawer isOpen={isBrandsDrawerOpen} onClose={() => setIsBrandsDrawerOpen(false)} />
     </>
   );
 }
@@ -572,14 +749,14 @@ function CarCard({ car }: { car: Car; key?: React.Key }) {
           <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-zinc-900">
             {car.year}
           </div>
-          <div className="absolute top-4 right-4 bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+          <div className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold">
             ${car.price.toLocaleString()}
           </div>
         </div>
         <div className="p-6">
           <div className="flex justify-between items-start mb-2">
             <div>
-              <h3 className="text-xl font-bold text-zinc-900 group-hover:text-emerald-600 transition-colors">
+              <h3 className="text-xl font-bold text-zinc-900 group-hover:text-red-600 transition-colors">
                 {car.make} {car.model}
               </h3>
               <p className="text-zinc-500 text-sm font-medium">
@@ -595,7 +772,7 @@ function CarCard({ car }: { car: Car; key?: React.Key }) {
             <div className="w-px h-8 bg-zinc-100" />
             <div className="flex flex-col">
               <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Estado</span>
-              <span className="text-sm font-bold text-emerald-600">Excelente</span>
+              <span className="text-sm font-bold text-red-600">Excelente</span>
             </div>
           </div>
         </div>
@@ -638,12 +815,12 @@ function Home() {
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 text-center">
           <div>
-            <span className="inline-block px-4 py-1.5 mb-6 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-xs font-bold uppercase tracking-widest">
+            <span className="inline-block px-4 py-1.5 mb-6 bg-red-600/10 border border-red-600/20 rounded-full text-red-400 text-xs font-bold uppercase tracking-widest">
               Concesionario Premium en Cúcuta
             </span>
             <h1 className="text-6xl md:text-8xl font-black text-white mb-8 tracking-tighter leading-[0.9]">
               CONDUCE TU <br />
-              <span className="text-emerald-500">SUEÑO</span> HOY.
+              <span className="text-red-600">SUEÑO</span> HOY.
             </h1>
             <p className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 font-medium">
               Vive el futuro de la compra de vehículos. Precios transparentes, 
@@ -691,7 +868,7 @@ function Home() {
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
             <div>
               <h2 className="text-4xl md:text-5xl font-black text-zinc-900 tracking-tight mb-4">
-                VEHÍCULOS <span className="text-emerald-500">DESTACADOS</span>
+                VEHÍCULOS <span className="text-red-600">DESTACADOS</span>
               </h2>
               <p className="text-zinc-500 font-medium max-w-lg">
                 Vehículos premium seleccionados a mano que cumplen con nuestros estrictos criterios de inspección de 150 puntos.
@@ -720,7 +897,7 @@ function Home() {
           <div>
             <h2 className="text-4xl md:text-5xl font-black text-zinc-900 tracking-tight mb-8">
               ¿POR QUÉ ELEGIR <br />
-              <span className="text-emerald-500">AUTOSYA?</span>
+              <span className="text-red-600">AUTOSYA?</span>
             </h2>
             <div className="space-y-8">
               {[
@@ -730,7 +907,7 @@ function Home() {
               ].map((item, i) => (
                 <div key={i} className="flex gap-6">
                   <div className="w-14 h-14 bg-white rounded-2xl shadow-sm flex items-center justify-center flex-shrink-0">
-                    <item.icon className="w-6 h-6 text-emerald-500" />
+                    <item.icon className="w-6 h-6 text-red-600" />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-zinc-900 mb-2">{item.title}</h3>
@@ -751,8 +928,8 @@ function Home() {
             </div>
             <div className="absolute -bottom-10 -left-10 bg-white p-8 rounded-3xl shadow-xl max-w-xs hidden md:block">
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-emerald-600" />
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-red-600" />
                 </div>
                 <div className="font-bold text-zinc-900">Asistente IA</div>
               </div>
@@ -818,7 +995,7 @@ function Inventory() {
           <div className="lg:col-span-1 space-y-8">
             <div className="bg-white p-8 rounded-[32px] shadow-sm border border-zinc-100">
               <div className="flex items-center gap-2 mb-6">
-                <Filter className="w-5 h-5 text-emerald-500" />
+                <Filter className="w-5 h-5 text-red-600" />
                 <h3 className="font-bold text-zinc-900">Filtros</h3>
               </div>
 
@@ -830,7 +1007,7 @@ function Inventory() {
                     <input
                       type="text"
                       placeholder="Modelo, marca..."
-                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-emerald-500 transition-all"
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-red-600 transition-all"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                     />
@@ -935,10 +1112,10 @@ function CarDetail() {
             <div className="mb-8">
               <div className="flex items-center gap-3 mb-4">
                 <span className="bg-zinc-100 px-4 py-1 rounded-full text-xs font-bold text-zinc-600">{car.year}</span>
-                <span className="bg-emerald-100 px-4 py-1 rounded-full text-xs font-bold text-emerald-600">Usado Certificado</span>
+                <span className="bg-red-100 px-4 py-1 rounded-full text-xs font-bold text-red-600">Usado Certificado</span>
               </div>
               <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-2 uppercase">
-                {car.make} <span className="text-emerald-500">{car.model}</span>
+                {car.make} <span className="text-red-600">{car.model}</span>
               </h1>
               <p className="text-3xl font-bold text-zinc-900">${car.price.toLocaleString()}</p>
             </div>
@@ -969,7 +1146,7 @@ function CarDetail() {
               <button className="flex-1 bg-black text-white py-5 rounded-2xl font-bold text-lg hover:bg-zinc-800 transition-all flex items-center justify-center gap-2">
                 <Phone className="w-5 h-5" /> Contactar Vendedor
               </button>
-              <button className="flex-1 bg-emerald-500 text-white py-5 rounded-2xl font-bold text-lg hover:bg-emerald-600 transition-all flex items-center justify-center gap-2">
+              <button className="flex-1 bg-red-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all flex items-center justify-center gap-2">
                 <Mail className="w-5 h-5" /> Consultar Ahora
               </button>
             </div>
@@ -999,7 +1176,7 @@ function Footer() {
           </p>
           <div className="flex gap-4">
             {[Phone, Mail, MapPin].map((Icon, i) => (
-              <div key={i} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-emerald-500 transition-colors cursor-pointer">
+              <div key={i} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-red-600 transition-colors cursor-pointer">
                 <Icon className="w-4 h-4" />
               </div>
             ))}
@@ -1021,9 +1198,9 @@ function Footer() {
             <input 
               type="email" 
               placeholder="Correo electrónico" 
-              className="bg-white/5 border-none rounded-xl px-4 py-3 text-sm flex-1 focus:ring-2 focus:ring-emerald-500"
+              className="bg-white/5 border-none rounded-xl px-4 py-3 text-sm flex-1 focus:ring-2 focus:ring-red-600"
             />
-            <button className="bg-emerald-500 p-3 rounded-xl hover:bg-emerald-600 transition-colors">
+            <button className="bg-red-600 p-3 rounded-xl hover:bg-red-700 transition-colors">
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
@@ -1137,7 +1314,7 @@ export default function App() {
 
   return (
     <Router>
-      <div className="font-sans selection:bg-emerald-500/30">
+      <div className="font-sans selection:bg-red-600/30">
         <Navbar />
         <main>
           <Routes>
@@ -1149,6 +1326,7 @@ export default function App() {
         </main>
         <Footer />
         <AIAssistant inventory={inventory} />
+        <WhatsAppButton />
       </div>
     </Router>
   );
