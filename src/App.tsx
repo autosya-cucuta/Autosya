@@ -1,6 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from "react-router-dom";
-import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut } from "lucide-react";
+import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut, Table, Save, Trash2, Plus, Check, XCircle } from "lucide-react";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
@@ -472,6 +472,18 @@ function Navbar() {
             
             {user ? (
               <div className="flex items-center gap-4">
+                <Link 
+                  to="/spreadsheet"
+                  className={cn(
+                    "flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-full transition-all",
+                    isScrolled 
+                      ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100" 
+                      : "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                  )}
+                >
+                  <Table className="w-4 h-4" />
+                  Mis Anuncios
+                </Link>
                 <div className="flex items-center gap-2 bg-zinc-100/50 p-1 pr-3 rounded-full border border-zinc-200">
                   <img 
                     src={user.user_metadata.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=10b981&color=fff`} 
@@ -540,15 +552,25 @@ function Navbar() {
               </button>
             )}
             {user && (
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  handleLogout();
-                }}
-                className="bg-red-50 text-red-600 text-center py-3 rounded-xl font-bold"
-              >
-                Cerrar Sesión
-              </button>
+              <>
+                <Link
+                  to="/spreadsheet"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-center gap-2 bg-emerald-50 text-emerald-600 py-3 rounded-xl font-bold"
+                >
+                  <Table className="w-4 h-4" />
+                  Mis Anuncios
+                </Link>
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="bg-red-50 text-red-600 text-center py-3 rounded-xl font-bold"
+                >
+                  Cerrar Sesión
+                </button>
+              </>
             )}
           </div>
         )}
@@ -980,6 +1002,425 @@ function CarDetail() {
   );
 }
 
+function SpreadsheetEditor() {
+  const [user, setUser] = useState<any>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [cars, setCars] = useState<Car[]>([]);
+  const [editedCars, setEditedCars] = useState<Map<number, Partial<Car>>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [newRows, setNewRows] = useState<Partial<Car>[]>([]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoadingUser(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    async function fetchCars() {
+      const { data, error } = await supabase
+        .from("cars")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      
+      if (data) setCars(data);
+      setLoading(false);
+    }
+    fetchCars();
+  }, [user]);
+
+  const handleCellChange = (carId: number, field: keyof Car, value: string | number) => {
+    setEditedCars(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(carId) || {};
+      newMap.set(carId, { ...existing, [field]: value });
+      return newMap;
+    });
+  };
+
+  const handleNewRowChange = (index: number, field: keyof Car, value: string | number) => {
+    setNewRows(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const addNewRow = () => {
+    setNewRows(prev => [...prev, {
+      make: "", model: "", year: new Date().getFullYear(), price: 0,
+      mileage: 0, transmission: "Automatic", fuel_type: "Gasoline",
+      image_url: "", description: ""
+    }]);
+  };
+
+  const removeNewRow = (index: number) => {
+    setNewRows(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleRowSelection = (carId: number) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(carId)) newSet.delete(carId);
+      else newSet.add(carId);
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedRows.size === cars.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(cars.map(c => c.id)));
+    }
+  };
+
+  const handleSaveAll = async () => {
+    setSaving(true);
+    try {
+      // Update existing cars
+      for (const [carId, changes] of editedCars) {
+        const { error } = await supabase
+          .from("cars")
+          .update(changes)
+          .eq("id", carId)
+          .eq("user_id", user.id);
+        if (error) throw error;
+      }
+
+      // Insert new cars
+      if (newRows.length > 0) {
+        const validNewRows = newRows.filter(r => r.make && r.model);
+        if (validNewRows.length > 0) {
+          const { error } = await supabase
+            .from("cars")
+            .insert(validNewRows.map(r => ({ ...r, user_id: user.id })));
+          if (error) throw error;
+        }
+      }
+
+      // Refresh data
+      const { data } = await supabase
+        .from("cars")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      
+      if (data) setCars(data);
+      setEditedCars(new Map());
+      setNewRows([]);
+      alert("Cambios guardados exitosamente");
+    } catch (error: any) {
+      alert("Error al guardar: " + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedRows.size === 0) return;
+    if (!confirm(`¿Eliminar ${selectedRows.size} anuncio(s)?`)) return;
+
+    setSaving(true);
+    try {
+      for (const carId of selectedRows) {
+        const { error } = await supabase
+          .from("cars")
+          .delete()
+          .eq("id", carId)
+          .eq("user_id", user.id);
+        if (error) throw error;
+      }
+
+      setCars(prev => prev.filter(c => !selectedRows.has(c.id)));
+      setSelectedRows(new Set());
+      setEditedCars(prev => {
+        const newMap = new Map(prev);
+        for (const id of selectedRows) newMap.delete(id);
+        return newMap;
+      });
+    } catch (error: any) {
+      alert("Error al eliminar: " + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getCellValue = (car: Car, field: keyof Car) => {
+    const edited = editedCars.get(car.id);
+    if (edited && field in edited) return edited[field as keyof typeof edited];
+    return car[field];
+  };
+
+  const hasChanges = editedCars.size > 0 || newRows.length > 0;
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white p-12 rounded-[40px] shadow-xl border border-zinc-100 text-center">
+          <div className="w-20 h-20 bg-zinc-100 rounded-3xl flex items-center justify-center mx-auto mb-8">
+            <Table className="w-10 h-10 text-zinc-400" />
+          </div>
+          <h2 className="text-3xl font-black text-zinc-900 mb-4">Acceso Restringido</h2>
+          <p className="text-zinc-500 mb-10">Debes iniciar sesión para editar tus anuncios.</p>
+          <button 
+            onClick={() => window.dispatchEvent(new CustomEvent('open-login'))}
+            className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-emerald-600 transition-all"
+          >
+            Iniciar Sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const columns: { key: keyof Car; label: string; type: "text" | "number" | "select"; options?: string[] }[] = [
+    { key: "make", label: "Marca", type: "text" },
+    { key: "model", label: "Modelo", type: "text" },
+    { key: "year", label: "Año", type: "number" },
+    { key: "price", label: "Precio ($)", type: "number" },
+    { key: "mileage", label: "Km", type: "number" },
+    { key: "transmission", label: "Transmisión", type: "select", options: ["Automatic", "Manual"] },
+    { key: "fuel_type", label: "Combustible", type: "select", options: ["Gasoline", "Diesel", "Electric", "Hybrid"] },
+    { key: "image_url", label: "URL Imagen", type: "text" },
+  ];
+
+  return (
+    <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
+      <div className="max-w-[1600px] mx-auto">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-black text-zinc-900 tracking-tight">EDITAR ANUNCIOS</h1>
+            <p className="text-zinc-500 font-medium mt-2">Edita múltiples anuncios simultáneamente como en una hoja de cálculo.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {selectedRows.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                disabled={saving}
+                className="flex items-center gap-2 bg-red-500 text-white px-5 py-3 rounded-xl font-bold hover:bg-red-600 transition-all disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Eliminar ({selectedRows.size})
+              </button>
+            )}
+            <button
+              onClick={addNewRow}
+              className="flex items-center gap-2 bg-zinc-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-black transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Nuevo
+            </button>
+            <button
+              onClick={handleSaveAll}
+              disabled={saving || !hasChanges}
+              className={cn(
+                "flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all",
+                hasChanges 
+                  ? "bg-emerald-500 text-white hover:bg-emerald-600" 
+                  : "bg-zinc-200 text-zinc-400 cursor-not-allowed"
+              )}
+            >
+              <Save className="w-4 h-4" />
+              {saving ? "Guardando..." : "Guardar Todo"}
+            </button>
+          </div>
+        </div>
+
+        {hasChanges && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600" />
+            <span className="text-amber-800 font-medium">
+              Tienes cambios sin guardar. {editedCars.size > 0 && `${editedCars.size} fila(s) modificada(s).`} {newRows.length > 0 && `${newRows.length} fila(s) nueva(s).`}
+            </span>
+          </div>
+        )}
+
+        <div className="bg-white rounded-[32px] shadow-sm border border-zinc-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-zinc-50 border-b border-zinc-100">
+                  <th className="p-4 text-left">
+                    <input 
+                      type="checkbox"
+                      checked={cars.length > 0 && selectedRows.size === cars.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
+                    />
+                  </th>
+                  {columns.map(col => (
+                    <th key={col.key} className="p-4 text-left text-[10px] uppercase tracking-widest text-zinc-500 font-bold whitespace-nowrap">
+                      {col.label}
+                    </th>
+                  ))}
+                  <th className="p-4"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={columns.length + 2} className="p-20 text-center">
+                      <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    </td>
+                  </tr>
+                ) : cars.length === 0 && newRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={columns.length + 2} className="p-20 text-center">
+                      <Table className="w-12 h-12 text-zinc-300 mx-auto mb-4" />
+                      <p className="text-zinc-500 font-medium">No tienes anuncios publicados.</p>
+                      <button 
+                        onClick={addNewRow}
+                        className="mt-4 text-emerald-600 font-bold hover:underline"
+                      >
+                        Crear tu primer anuncio
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {cars.map(car => {
+                      const isEdited = editedCars.has(car.id);
+                      const isSelected = selectedRows.has(car.id);
+                      return (
+                        <tr 
+                          key={car.id} 
+                          className={cn(
+                            "border-b border-zinc-50 transition-colors",
+                            isSelected && "bg-emerald-50",
+                            isEdited && !isSelected && "bg-amber-50/50"
+                          )}
+                        >
+                          <td className="p-4">
+                            <input 
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleRowSelection(car.id)}
+                              className="w-4 h-4 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
+                            />
+                          </td>
+                          {columns.map(col => (
+                            <td key={col.key} className="p-2">
+                              {col.type === "select" ? (
+                                <select
+                                  value={getCellValue(car, col.key) as string}
+                                  onChange={(e) => handleCellChange(car.id, col.key, e.target.value)}
+                                  className="w-full bg-transparent border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                >
+                                  {col.options?.map(opt => (
+                                    <option key={opt} value={opt}>
+                                      {opt === "Automatic" ? "Automática" : opt === "Manual" ? "Manual" : 
+                                       opt === "Gasoline" ? "Gasolina" : opt === "Diesel" ? "Diesel" : 
+                                       opt === "Electric" ? "Eléctrico" : opt === "Hybrid" ? "Híbrido" : opt}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type={col.type}
+                                  value={getCellValue(car, col.key) as string | number}
+                                  onChange={(e) => handleCellChange(car.id, col.key, col.type === "number" ? parseInt(e.target.value) || 0 : e.target.value)}
+                                  className={cn(
+                                    "w-full bg-transparent border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent",
+                                    col.key === "image_url" && "min-w-[200px]"
+                                  )}
+                                />
+                              )}
+                            </td>
+                          ))}
+                          <td className="p-2">
+                            {isEdited && (
+                              <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-bold">
+                                <AlertCircle className="w-3 h-3" /> Modificado
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    
+                    {/* New rows */}
+                    {newRows.map((row, index) => (
+                      <tr key={`new-${index}`} className="border-b border-zinc-50 bg-emerald-50/30">
+                        <td className="p-4">
+                          <span className="inline-flex items-center justify-center w-6 h-6 bg-emerald-500 text-white rounded-full text-xs font-bold">
+                            <Plus className="w-3 h-3" />
+                          </span>
+                        </td>
+                        {columns.map(col => (
+                          <td key={col.key} className="p-2">
+                            {col.type === "select" ? (
+                              <select
+                                value={(row[col.key] as string) || (col.options?.[0] || "")}
+                                onChange={(e) => handleNewRowChange(index, col.key, e.target.value)}
+                                className="w-full bg-white border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                              >
+                                {col.options?.map(opt => (
+                                  <option key={opt} value={opt}>
+                                    {opt === "Automatic" ? "Automática" : opt === "Manual" ? "Manual" : 
+                                     opt === "Gasoline" ? "Gasolina" : opt === "Diesel" ? "Diesel" : 
+                                     opt === "Electric" ? "Eléctrico" : opt === "Hybrid" ? "Híbrido" : opt}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type={col.type}
+                                value={(row[col.key] as string | number) || ""}
+                                placeholder={col.label}
+                                onChange={(e) => handleNewRowChange(index, col.key, col.type === "number" ? parseInt(e.target.value) || 0 : e.target.value)}
+                                className={cn(
+                                  "w-full bg-white border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder:text-zinc-400",
+                                  col.key === "image_url" && "min-w-[200px]"
+                                )}
+                              />
+                            )}
+                          </td>
+                        ))}
+                        <td className="p-2">
+                          <button
+                            onClick={() => removeNewRow(index)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="mt-8 flex items-center justify-between text-sm text-zinc-500">
+          <div>
+            {cars.length} anuncio(s) • {selectedRows.size} seleccionado(s)
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 bg-amber-100 rounded"></span> Modificado</span>
+            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 bg-emerald-100 rounded"></span> Nuevo/Seleccionado</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Footer() {
   return (
     <footer className="bg-zinc-950 text-white py-20 px-6">
@@ -1145,6 +1586,7 @@ export default function App() {
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/car/:id" element={<CarDetail />} />
             <Route path="/sell" element={<SellCar />} />
+            <Route path="/spreadsheet" element={<SpreadsheetEditor />} />
           </Routes>
         </main>
         <Footer />

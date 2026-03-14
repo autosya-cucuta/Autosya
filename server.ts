@@ -10,10 +10,13 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Only create client if credentials are available
+const supabase = supabaseUrl && supabaseAnonKey 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 async function startServer() {
   const app = express();
@@ -23,6 +26,7 @@ async function startServer() {
 
   // API Routes
   app.get("/api/cars", async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Database not configured" });
     const { data, error } = await supabase
       .from("cars")
       .select("*")
@@ -33,6 +37,7 @@ async function startServer() {
   });
 
   app.get("/api/cars/:id", async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Database not configured" });
     const { data, error } = await supabase
       .from("cars")
       .select("*")
@@ -44,6 +49,7 @@ async function startServer() {
   });
 
   app.post("/api/cars", async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "Database not configured" });
     const { make, model, year, price, mileage, transmission, fuel_type, image_url, description } = req.body;
     const { data, error } = await supabase
       .from("cars")
