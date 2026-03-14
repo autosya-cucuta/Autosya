@@ -20,7 +20,7 @@ const supabase = supabaseUrl && supabaseAnonKey
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
 
@@ -75,8 +75,19 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.log(`Port ${PORT} is in use, trying ${Number(PORT) + 1}...`);
+      app.listen(Number(PORT) + 1, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${Number(PORT) + 1}`);
+      });
+    } else {
+      throw err;
+    }
   });
 }
 
