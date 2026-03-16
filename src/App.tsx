@@ -7,7 +7,7 @@ import type { Car } from "./lib/utils";
 
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { getCarAdvice, estimateCarValue } from "./services/geminiService";
-import { migrateAds, revertMigration } from "./services/migrationService";
+import { migrateFromCSV, revertMigration } from "./services/migrationService";
 import { BRANDS_DATA } from "./constants";
 
 // --- Components ---
@@ -1138,6 +1138,7 @@ function SettingsPage() {
   const [user, setUser] = useState<any>(null);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1145,17 +1146,19 @@ function SettingsPage() {
     });
   }, []);
 
-  const handleMigration = async () => {
-    if (!user) return;
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
     setIsMigrating(true);
-    setMigrationStatus("Migrando anuncios...");
+    setMigrationStatus("Procesando archivo CSV...");
     try {
-      await migrateAds(user.id);
-      setMigrationStatus("¡Migración completada con éxito!");
-      setTimeout(() => window.location.reload(), 2000);
+      const count = await migrateFromCSV(file, user.id);
+      setMigrationStatus(`¡Éxito! Se importaron/actualizaron ${count} anuncios.`);
+      setTimeout(() => window.location.reload(), 3000);
     } catch (error: any) {
       console.error(error);
-      setMigrationStatus(`Error: ${error.message || "No se pudo conectar con la base de datos"}`);
+      setMigrationStatus(`Error: ${error.message || "Error al procesar el archivo"}`);
     } finally {
       setIsMigrating(false);
     }
@@ -1221,29 +1224,39 @@ function SettingsPage() {
 
           {user?.email?.toLowerCase() === "autosyacucuta@gmail.com" && (
             <div className="bg-white p-8 rounded-[32px] shadow-sm border border-zinc-100">
-              <h3 className="text-xl font-bold text-zinc-900 mb-2">Migración de Datos</h3>
-              <p className="text-zinc-500 text-sm mb-6">Importa los anuncios del sitio anterior a tu cuenta actual.</p>
-              <div className="flex gap-4">
-                <button 
-                  onClick={handleMigration}
-                  disabled={isMigrating}
-                  className={cn(
-                    "flex-1 py-4 rounded-2xl font-bold transition-all",
-                    isMigrating ? "bg-zinc-100 text-zinc-400 cursor-not-allowed" : "bg-black text-white hover:bg-zinc-800"
-                  )}
-                >
-                  {isMigrating ? "Procesando..." : "Iniciar Importación"}
-                </button>
-                <button 
-                  onClick={handleRevert}
-                  disabled={isMigrating}
-                  className={cn(
-                    "flex-1 py-4 rounded-2xl font-bold transition-all border-2",
-                    isMigrating ? "border-zinc-100 text-zinc-400 cursor-not-allowed" : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
-                  )}
-                >
-                  Revertir
-                </button>
+              <h3 className="text-xl font-bold text-zinc-900 mb-2">Migración de Datos (CSV)</h3>
+              <p className="text-zinc-500 text-sm mb-6">Sube tu archivo Excel/CSV con los 425 anuncios para importarlos todos de una vez.</p>
+              <div className="flex flex-col gap-4">
+                <input 
+                  type="file" 
+                  accept=".csv" 
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isMigrating}
+                    className={cn(
+                      "flex-1 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2",
+                      isMigrating ? "bg-zinc-100 text-zinc-400 cursor-not-allowed" : "bg-black text-white hover:bg-zinc-800"
+                    )}
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    {isMigrating ? "Procesando..." : "Subir Archivo CSV"}
+                  </button>
+                  <button 
+                    onClick={handleRevert}
+                    disabled={isMigrating}
+                    className={cn(
+                      "flex-1 py-4 rounded-2xl font-bold transition-all border-2",
+                      isMigrating ? "border-zinc-100 text-zinc-400 cursor-not-allowed" : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+                    )}
+                  >
+                    Limpiar Importados
+                  </button>
+                </div>
               </div>
               {migrationStatus && (
                 <p className="mt-4 text-center text-sm font-bold text-red-600">{migrationStatus}</p>
@@ -1622,6 +1635,7 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
   const { id } = useParams();
   const [car, setCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeImage, setActiveImage] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchCar() {
@@ -1632,7 +1646,10 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
         .eq("id", id)
         .single();
       
-      if (data) setCar(data);
+      if (data) {
+        setCar(data);
+        setActiveImage(data.image_url);
+      }
       setLoading(false);
     }
     fetchCar();
@@ -1641,26 +1658,37 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
   if (loading) return <div className="pt-40 text-center">Cargando...</div>;
   if (!car) return <div className="pt-40 text-center">Carro no encontrado</div>;
 
+  const images = car.all_images && car.all_images.length > 0 ? car.all_images : [car.image_url];
+
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-white">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           <div className="space-y-8">
-            <div className="aspect-[16/10] rounded-[40px] overflow-hidden shadow-2xl">
+            <div className="aspect-[16/10] rounded-[40px] overflow-hidden shadow-2xl bg-zinc-100">
               <img
-                src={car.image_url}
+                src={activeImage || car.image_url}
                 alt={car.model}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="aspect-square rounded-2xl bg-zinc-100 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity">
-                  <img src={car.image_url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                </div>
-              ))}
-            </div>
+            {images.length > 1 && (
+              <div className="grid grid-cols-4 gap-4">
+                {images.map((img, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => setActiveImage(img)}
+                    className={cn(
+                      "aspect-square rounded-2xl bg-zinc-100 overflow-hidden cursor-pointer hover:opacity-80 transition-all border-2",
+                      activeImage === img ? "border-red-600" : "border-transparent"
+                    )}
+                  >
+                    <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -1689,9 +1717,11 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
             <div className="grid grid-cols-2 gap-6 mb-10">
               {[
                 { label: "Kilometraje", value: `${car.mileage.toLocaleString()} km` },
-                { label: "Transmisión", value: car.transmission === "Automatic" ? "Automática" : "Manual" },
+                { label: "Transmisión", value: car.transmission === "Automatic" ? "Automática" : car.transmission === "Manual" ? "Manual" : car.transmission },
                 { label: "Combustible", value: car.fuel_type === "Gasoline" ? "Gasolina" : car.fuel_type === "Diesel" ? "Diesel" : car.fuel_type },
-                { label: "Motor", value: car.engine || "No especificado" }
+                { label: "Motor", value: car.engine || "No especificado" },
+                { label: "Tipo", value: car.vehicle_type || "No especificado" },
+                { label: "Nacionalidad", value: car.nationality || "No especificado" }
               ].map((spec, i) => (
                 <div key={i} className="bg-zinc-50 p-6 rounded-3xl border border-zinc-100">
                   <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold mb-1">{spec.label}</div>
@@ -1700,14 +1730,20 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
               ))}
             </div>
 
-            {(car.plate || car.color || car.soat_until || car.techno_until) && (
+            {(car.plate_city || car.color || car.soat_until || car.techno_until || car.location_city) && (
               <div className="mb-10 p-8 bg-zinc-50 rounded-[40px] border border-zinc-100">
                 <h3 className="text-sm font-bold text-zinc-900 mb-6 uppercase tracking-widest">Ficha Técnica</h3>
                 <div className="grid grid-cols-2 gap-y-4 text-sm">
-                  {car.plate && (
+                  {car.location_city && (
                     <>
-                      <div className="text-zinc-400">Placa</div>
-                      <div className="font-bold text-zinc-900 text-right">{car.plate} {car.plate_city ? `(${car.plate_city})` : ""}</div>
+                      <div className="text-zinc-400">Ubicación</div>
+                      <div className="font-bold text-zinc-900 text-right">{car.location_city}</div>
+                    </>
+                  )}
+                  {car.plate_city && (
+                    <>
+                      <div className="text-zinc-400">Ciudad de Placa</div>
+                      <div className="font-bold text-zinc-900 text-right">{car.plate_city}</div>
                     </>
                   )}
                   {car.color && (

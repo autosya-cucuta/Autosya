@@ -26,7 +26,10 @@ export interface Car {
   plate_city?: string;
   soat_until?: string;
   techno_until?: string;
-  whatsapp?: string;
-  plate?: string;
   legacy_id?: number;
+  all_images?: string[];
+  vehicle_type?: string; // Automovil | Camioneta 4x4 | Camioneta 4x2
+  nationality?: string; // Colombiano | Venezolano
+  owner_info?: string; // Private info
+  location_city?: string; // City where vehicle is located
 }

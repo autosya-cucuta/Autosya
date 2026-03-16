@@ -1,410 +1,114 @@
 import { supabase } from "../lib/supabase";
+import Papa from "papaparse";
 
-export const legacyAds = [
-  {
-    id: 30060,
-    title: "HYUNDAI TERRACAN GL 2006 4X4 MECANICA blindada",
-    images: "https://www.autosya.com.co/wp-content/uploads/2023/04/terraca.jpg|https://www.autosya.com.co/wp-content/uploads/2023/04/terrass.jpg",
-    price: 6,
-    year: 2006,
-    mileage: 135000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Hiundai>Terracan gl",
-    color: "azul",
-    engine: "3.5",
-    plate_last_digit: "6",
-    plate_city: "bogota",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 30159,
-    title: "Suzuki alto 2020 poco uso",
-    images: "https://www.autosya.com.co/wp-content/uploads/2023/05/IMG_20230502_142826-scaled.jpg",
-    price: 3,
-    year: 2020,
-    mileage: 14000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Suzuki>Swift",
-    color: "gris",
-    engine: "800",
-    plate_last_digit: "1",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "LUISALBERTOBAUTISTA3184440008",
-    plate: ""
-  },
-  {
-    id: 31283,
-    title: "Ford Ranger 2022 diesel 4x4",
-    images: "https://www.autosya.com.co/wp-content/uploads/2023/08/IMG_20230817_091717-scaled.jpg",
-    price: 1,
-    year: 2022,
-    mileage: 17000,
-    fuel: "diesel",
-    transmission: "dual",
-    category: "Ford>ranger",
-    color: "azul",
-    engine: "3.2",
-    plate_last_digit: "1",
-    plate_city: "Bogotá",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 36086,
-    title: "Captiva 2015 automática",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/01/Screenshot_20240119_092959-4c6ce7be.jpg",
-    price: 4,
-    year: 2015,
-    mileage: 49000,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Chevrolet>Captiva Sport",
-    color: "rojo",
-    engine: "1.5",
-    plate_last_digit: "5",
-    plate_city: "Bogotá",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 36709,
-    title: "Chevrolet onix 2023 automática",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/03/Screenshot_20240318_095257-8a1037eb.jpg",
-    price: 6,
-    year: 2023,
-    mileage: 9000,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Chevrolet>Onix",
-    color: "gris",
-    engine: "1.",
-    plate_last_digit: "-1",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "Jihan+57 300 8754275",
-    plate: ""
-  },
-  {
-    id: 36815,
-    title: "Fortuner sw4 2018",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/04/Screenshot_20240408_211603-c9373879.jpg",
-    price: 15,
-    year: 2018,
-    mileage: 40000,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Toyota>Fortuner",
-    color: "blanco",
-    engine: "2.7",
-    plate_last_digit: "6",
-    plate_city: "Villa del Rosario",
-    phone: "",
-    whatsapp: "Peña+57 315 780",
-    plate: ""
-  },
-  {
-    id: 36894,
-    title: "Koleos 2011 mecanica",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/04/Screenshot_20240411_163920-2eec1c09.jpg",
-    price: 36,
-    year: 2011,
-    mileage: 125000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Renault>Koleos",
-    color: "gris",
-    engine: "2.5",
-    plate_last_digit: "2",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37019,
-    title: "Onix 2023 mecanico",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/04/Screenshot_20240426_105210-dffd384a.jpg",
-    price: 63,
-    year: 2023,
-    mileage: 20000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Chevrolet>Onix",
-    color: "blanco",
-    engine: "1.0 Turbo",
-    plate_last_digit: "9",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37309,
-    title: "Volkswagen voyager 2018",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/06/Screenshot_20240617_094729-48ed7303.jpg",
-    price: 37,
-    year: 2018,
-    mileage: 96000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Volkswagen>voyager",
-    color: "plata",
-    engine: "1.6",
-    plate_last_digit: "4",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37599,
-    title: "Onix 2021 automática",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/07/Screenshot_20240719_105359.jpg",
-    price: 53,
-    year: 2021,
-    mileage: 67000,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Chevrolet>Onix",
-    color: "azul",
-    engine: "1.0 Turbo",
-    plate_last_digit: "7",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37616,
-    title: "Chevrolet tracker 2023 premier",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/07/Screenshot_20240720_093642.jpg",
-    price: 92,
-    year: 2023,
-    mileage: 7700,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Chevrolet>Tracker",
-    color: "blanco",
-    engine: "1.2 Turbo",
-    plate_last_digit: "3",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37625,
-    title: "Kia Sorento 2007 Diesel 4x4",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/07/Screenshot_20240720_101655.jpg",
-    price: 3,
-    year: 2007,
-    mileage: 165000,
-    fuel: "diesel",
-    transmission: "dual",
-    category: "Kia>Sorento",
-    color: "gris",
-    engine: "2.5",
-    plate_last_digit: "0",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37633,
-    title: "Spark gt 2020",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/07/Screenshot_20240722_153534.jpg",
-    price: 42,
-    year: 2020,
-    mileage: 37000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Chevrolet>Spark Gt",
-    color: "negro",
-    engine: "1.2",
-    plate_last_digit: "8",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37646,
-    title: "Nissan Versa 2022 automática",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/07/Screenshot_20240722_204833.jpg",
-    price: 6,
-    year: 2022,
-    mileage: 28099,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Nissan>Versa",
-    color: "plata",
-    engine: "1.6",
-    plate_last_digit: "5",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37691,
-    title: "Dodge journey 2015 automática",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/08/Screenshot_20240803_103445.jpg",
-    price: 4,
-    year: 2015,
-    mileage: 72000,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Dodge>Journey",
-    color: "blanco",
-    engine: "2.4",
-    plate_last_digit: "2",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37714,
-    title: "Vitara Suzuki 2020 4x4",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/08/Screenshot_20240809_103421.jpg",
-    price: 6,
-    year: 2020,
-    mileage: 94000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Suzuki>Vitara",
-    color: "gris",
-    engine: "1.6",
-    plate_last_digit: "1",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37750,
-    title: "Ecosport 2014 mecanica",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/08/Screenshot_20240823_095717.jpg",
-    price: 3,
-    year: 2014,
-    mileage: 104000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Ford>EcoSport",
-    color: "blanco",
-    engine: "2.0",
-    plate_last_digit: "4",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37755,
-    title: "Ecosport 2014 4x4 mecánica",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/08/Screenshot_20240823_103220.jpg",
-    price: 4,
-    year: 2014,
-    mileage: 80000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Ford>EcoSport",
-    color: "rojo",
-    engine: "2.0",
-    plate_last_digit: "0",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 37960,
-    title: "Tracker 2015 mecánico",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/10/Screenshot_20241003_112018_com.google.android.apps_.photos.jpg",
-    price: 38,
-    year: 2015,
-    mileage: 89000,
-    fuel: "gasolina",
-    transmission: "mecánica",
-    category: "Chevrolet>Tracker",
-    color: "gris",
-    engine: "1.8",
-    plate_last_digit: "6",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  },
-  {
-    id: 38096,
-    title: "Tucson 2008 4x4 automática",
-    images: "https://www.autosya.com.co/wp-content/uploads/2024/10/1001185391.jpg",
-    price: 3,
-    year: 2008,
-    mileage: 135000,
-    fuel: "gasolina",
-    transmission: "dual",
-    category: "Hiundai>Tucson",
-    color: "plata",
-    engine: "2.0",
-    plate_last_digit: "3",
-    plate_city: "Cucuta",
-    phone: "",
-    whatsapp: "",
-    plate: ""
-  }
-];
+export interface LegacyAd {
+  id?: string | number;
+  title?: string;
+  images?: string;
+  price?: string | number;
+  year?: string | number;
+  mileage?: string | number;
+  fuel?: string;
+  transmission?: string;
+  category?: string;
+  color?: string;
+  engine?: string;
+  plate_last_digit?: string;
+  plate_city?: string;
+  phone?: string;
+  whatsapp?: string;
+  plate?: string;
+  description?: string;
+}
 
-export async function migrateAds(userId: string) {
+export async function migrateFromCSV(csvFile: File, userId: string) {
   if (!supabase) {
     throw new Error("La base de datos no está configurada correctamente.");
   }
 
-  const adsToInsert = legacyAds.map(ad => {
-    const [make, model] = ad.category.split(">");
-    const imageUrl = ad.images.split("|")[0];
-    const normalizedPrice = ad.price < 1000 ? ad.price * 1000000 : ad.price;
+  return new Promise((resolve, reject) => {
+    Papa.parse(csvFile, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const adsToInsert = results.data.map((ad: any) => {
+            // Handle case-insensitive headers
+            const getVal = (keys: string[]) => {
+              for (const key of keys) {
+                if (ad[key] !== undefined) return ad[key];
+                if (ad[key.toLowerCase()] !== undefined) return ad[key.toLowerCase()];
+                if (ad[key.charAt(0).toUpperCase() + key.slice(1)] !== undefined) return ad[key.charAt(0).toUpperCase() + key.slice(1)];
+              }
+              return "";
+            };
 
-    return {
-      make: make || "Otro",
-      model: model || ad.title,
-      year: ad.year,
-      price: normalizedPrice,
-      mileage: ad.mileage,
-      fuel_type: ad.fuel === "gasolina" ? "Gasoline" : ad.fuel === "diesel" ? "Diesel" : "Hybrid",
-      transmission: ad.transmission === "mecánica" ? "Manual" : "Automatic",
-      image_url: imageUrl,
-      description: ad.title,
-      user_id: userId,
-      color: (ad as any).color,
-      engine: (ad as any).engine,
-      plate_last_digit: (ad as any).plate_last_digit,
-      plate_city: (ad as any).plate_city,
-      phone: (ad as any).phone,
-      whatsapp: (ad as any).whatsapp,
-      plate: (ad as any).plate,
-      legacy_id: ad.id
-    };
+            const category = getVal(["category"]);
+            const title = getVal(["title"]);
+            const [make, ...modelParts] = category.includes(">") ? category.split(">") : [getVal(["make"]) || "Otro", getVal(["model"]) || title];
+            const model = modelParts.join(" ") || title || "Modelo no especificado";
+
+            const rawImages = getVal(["images", "image_url"]);
+            const imagesArray = String(rawImages).split(/[|]|(?<=\.jpg|\.png|\.jpeg)\.?(?=http)/i)
+              .map((img: string) => img.trim())
+              .filter((img: string) => img.startsWith("http"));
+            
+            const mainImage = imagesArray[0] || "";
+
+            // Robust Price Parsing
+            const rawPrice = String(getVal(["price"]) || "0").replace(/[^0-9]/g, '');
+            let price = parseInt(rawPrice) || 0;
+            if (price > 0 && price < 1000) price = price * 1000000;
+
+            // Robust Mileage Parsing
+            const rawMileage = String(getVal(["mileage"]) || "0").replace(/[^0-9]/g, '');
+            const mileage = parseInt(rawMileage) || 0;
+
+            const rawTrans = String(getVal(["transmission"]) || "").toLowerCase();
+            let transmission = "Automatic";
+            if (rawTrans.includes("mec") || rawTrans.includes("man")) transmission = "Manual";
+            if (rawTrans.includes("dual")) transmission = "Dual";
+
+            return {
+              make: (make || "Otro").trim(),
+              model: (model || "Modelo").trim(),
+              year: parseInt(getVal(["year"])) || 2024,
+              price: price,
+              mileage: mileage,
+              fuel_type: String(getVal(["fuel", "fuel_type"])).toLowerCase().includes("die") ? "Diesel" : "Gasoline",
+              transmission: transmission,
+              image_url: mainImage,
+              all_images: imagesArray,
+              description: getVal(["description"]) || title || "",
+              user_id: userId,
+              color: getVal(["color"]),
+              engine: getVal(["engine"]),
+              plate_last_digit: getVal(["plate_last_digit"]),
+              plate_city: getVal(["plate_city"]),
+              legacy_id: parseInt(getVal(["id"])) || null,
+              vehicle_type: getVal(["tipo", "vehicle_type"]),
+              nationality: getVal(["nac", "nationality"]),
+              owner_info: getVal(["dueno", "owner_info"]),
+              location_city: getVal(["ciudad", "location_city", "Ciudad"])
+            };
+          }).filter((ad: any) => ad.legacy_id !== null);
+
+          // Insert in chunks of 50 to avoid payload limits
+          const chunkSize = 50;
+          for (let i = 0; i < adsToInsert.length; i += chunkSize) {
+            const chunk = adsToInsert.slice(i, i + chunkSize);
+            const { error } = await supabase.from("cars").upsert(chunk, { onConflict: 'legacy_id' });
+            if (error) throw error;
+          }
+
+          resolve(adsToInsert.length);
+        } catch (error) {
+          reject(error);
+        }
+      },
+      error: (error) => reject(error)
+    });
   });
-
-  // Use upsert to avoid duplicates if legacy_id is unique (or just insert and let revert handle it)
-  // For now, let's keep it as insert to match the previous logic, but upsert is safer.
-  const { data, error } = await supabase.from("cars").upsert(adsToInsert, { onConflict: 'legacy_id' }).select();
-
-  if (error) {
-    console.error("Error en migración masiva:", error);
-    throw error;
-  }
-  
-  return data;
 }
 
 export async function revertMigration() {
