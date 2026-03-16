@@ -10,6 +10,34 @@ import { getCarAdvice, estimateCarValue } from "./services/geminiService";
 import { migrateFromCSV, revertMigration } from "./services/migrationService";
 import { BRANDS_DATA } from "./constants";
 
+// --- SEO Component ---
+function SEO({ title, description, image, url }: { title?: string; description?: string; image?: string; url?: string }) {
+  useEffect(() => {
+    if (title) {
+      document.title = `${title} | Autosya Cúcuta`;
+    }
+    
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc && description) {
+      metaDesc.setAttribute('content', description);
+    }
+
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle && title) ogTitle.setAttribute('content', title);
+
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc && description) ogDesc.setAttribute('content', description);
+
+    const ogImage = document.querySelector('meta[property="og:image"]');
+    if (ogImage && image) ogImage.setAttribute('content', image);
+
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl && url) ogUrl.setAttribute('content', url);
+  }, [title, description, image, url]);
+
+  return null;
+}
+
 // --- Components ---
 
 function WhatsAppButton() {
@@ -94,8 +122,57 @@ function WhatsAppButton() {
 
 function BrandsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+  const [brands, setBrands] = useState<{ name: string; count: number; models: { name: string; count: number }[] }[]>([]);
+  const navigate = useNavigate();
 
-  const brand = BRANDS_DATA.find(b => b.name === selectedBrand);
+  useEffect(() => {
+    async function fetchBrands() {
+      const { data, error } = await supabase
+        .from("cars")
+        .select("make, model");
+      
+      if (data) {
+        const brandsMap: Record<string, { count: number; models: Record<string, number> }> = {};
+        
+        data.forEach(car => {
+          if (!brandsMap[car.make]) {
+            brandsMap[car.make] = { count: 0, models: {} };
+          }
+          brandsMap[car.make].count++;
+          if (car.model) {
+            brandsMap[car.make].models[car.model] = (brandsMap[car.make].models[car.model] || 0) + 1;
+          }
+        });
+
+        const formattedBrands = Object.entries(brandsMap).map(([name, info]) => ({
+          name,
+          count: info.count,
+          models: Object.entries(info.models).map(([mName, mCount]) => ({
+            name: mName,
+            count: mCount
+          })).sort((a, b) => b.count - a.count)
+        })).sort((a, b) => a.name.localeCompare(b.name));
+
+        setBrands(formattedBrands);
+      }
+    }
+
+    if (isOpen) {
+      fetchBrands();
+    }
+  }, [isOpen]);
+
+  const brand = brands.find(b => b.name === selectedBrand);
+
+  const handleBrandClick = (brandName: string) => {
+    navigate(`/inventory?make=${brandName}`);
+    onClose();
+  };
+
+  const handleModelClick = (modelName: string) => {
+    navigate(`/inventory?search=${modelName}`);
+    onClose();
+  };
 
   return (
     <AnimatePresence>
@@ -135,24 +212,36 @@ function BrandsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
             <div className="flex-1 overflow-y-auto">
               {!selectedBrand ? (
                 <div className="divide-y divide-zinc-50">
-                  {BRANDS_DATA.map((brand) => (
+                  {brands.map((b) => (
                     <button
-                      key={brand.name}
-                      onClick={() => brand.hasModels ? setSelectedBrand(brand.name) : null}
+                      key={b.name}
+                      onClick={() => b.models.length > 0 ? setSelectedBrand(b.name) : handleBrandClick(b.name)}
                       className="w-full p-6 flex items-center justify-between hover:bg-zinc-50 transition-colors group"
                     >
-                      <span className="text-lg font-medium text-zinc-600 group-hover:text-zinc-900">{brand.name}</span>
-                      {brand.hasModels && <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-zinc-900" />}
+                      <div className="flex items-center gap-4">
+                        <span className="text-lg font-medium text-zinc-600 group-hover:text-zinc-900">{b.name}</span>
+                        <span className="text-xs font-bold text-zinc-300 group-hover:text-red-600">{b.count}</span>
+                      </div>
+                      {b.models.length > 0 && <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-zinc-900" />}
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="p-6">
-                  <h3 className="text-3xl font-black text-red-600 uppercase mb-8 tracking-tight">{selectedBrand}</h3>
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-3xl font-black text-red-600 uppercase tracking-tight">{selectedBrand}</h3>
+                    <button 
+                      onClick={() => handleBrandClick(selectedBrand)}
+                      className="text-xs font-bold text-zinc-400 hover:text-black underline underline-offset-4"
+                    >
+                      Ver todos {selectedBrand}
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-3">
                     {brand?.models?.map((model) => (
                       <button
                         key={model.name}
+                        onClick={() => handleModelClick(model.name)}
                         className="flex items-center gap-3 px-4 py-2 bg-white border border-zinc-200 rounded-xl hover:border-red-600 hover:shadow-md transition-all group"
                       >
                         <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900">{model.name}</span>
@@ -1306,6 +1395,7 @@ function CarCard({ car, isFavorite, onToggleFavorite }: { car: Car; isFavorite?:
                 {car.make} {car.model}
               </h3>
               <p className="text-zinc-500 text-sm font-medium">
+                {car.vehicle_type && `${car.vehicle_type} • `}
                 {car.transmission === "Automatic" ? "Automática" : car.transmission === "Manual" ? "Manual" : car.transmission} • {car.fuel_type === "Gasoline" ? "Gasolina" : car.fuel_type === "Diesel" ? "Diesel" : car.fuel_type}
               </p>
             </div>
@@ -1317,8 +1407,8 @@ function CarCard({ car, isFavorite, onToggleFavorite }: { car: Car; isFavorite?:
             </div>
             <div className="w-px h-8 bg-zinc-100" />
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Estado</span>
-              <span className="text-sm font-bold text-red-600">Excelente</span>
+              <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Ubicación</span>
+              <span className="text-sm font-bold text-zinc-700">{car.location_city || "Cúcuta"}</span>
             </div>
           </div>
         </div>
@@ -1347,6 +1437,10 @@ function Home({ favorites, onToggleFavorite }: { favorites: number[], onToggleFa
 
   return (
     <div className="min-h-screen">
+      <SEO 
+        title="Compra y Venta de Carros Usados en Cúcuta" 
+        description="Encuentra los mejores carros usados en Cúcuta con Autosya. Vehículos certificados, financiamiento y los precios más bajos del mercado."
+      />
       {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden bg-zinc-950">
         <div className="absolute inset-0 z-0">
@@ -1503,13 +1597,20 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("search") || "");
-  const [makeFilter, setMakeFilter] = useState("All");
+  const [makeFilter, setMakeFilter] = useState(searchParams.get("make") || "All");
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [transmissionFilter, setTransmissionFilter] = useState("All");
+  const [fuelFilter, setFuelFilter] = useState("All");
+  const [nationalityFilter, setNationalityFilter] = useState("All");
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 500000000]);
+  const [yearRange, setYearRange] = useState<[number, number]>([1980, 2026]);
 
   useEffect(() => {
     const querySearch = searchParams.get("search");
-    if (querySearch !== null) {
-      setSearch(querySearch);
-    }
+    if (querySearch !== null) setSearch(querySearch);
+    
+    const queryMake = searchParams.get("make");
+    if (queryMake !== null) setMakeFilter(queryMake);
   }, [searchParams]);
 
   useEffect(() => {
@@ -1538,13 +1639,36 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
     if (makeFilter !== "All") {
       result = result.filter(c => c.make === makeFilter);
     }
+    if (typeFilter !== "All") {
+      result = result.filter(c => c.vehicle_type === typeFilter);
+    }
+    if (transmissionFilter !== "All") {
+      result = result.filter(c => c.transmission === transmissionFilter);
+    }
+    if (fuelFilter !== "All") {
+      result = result.filter(c => c.fuel_type === fuelFilter);
+    }
+    if (nationalityFilter !== "All") {
+      result = result.filter(c => c.nationality === nationalityFilter);
+    }
+    result = result.filter(c => c.price >= priceRange[0] && c.price <= priceRange[1]);
+    result = result.filter(c => c.year >= yearRange[0] && c.year <= yearRange[1]);
+    
     setFilteredCars(result);
-  }, [search, makeFilter, cars]);
+  }, [search, makeFilter, typeFilter, transmissionFilter, fuelFilter, nationalityFilter, priceRange, yearRange, cars]);
 
-  const makes = ["All", ...new Set(cars.map(c => c.make))];
+  const makes = ["All", ...new Set(cars.map(c => c.make))].sort();
+  const types = ["All", ...new Set(cars.filter(c => c.vehicle_type).map(c => c.vehicle_type!))].sort();
+  const transmissions = ["All", ...new Set(cars.map(c => c.transmission))].sort();
+  const fuels = ["All", ...new Set(cars.map(c => c.fuel_type))].sort();
+  const nationalities = ["All", ...new Set(cars.filter(c => c.nationality).map(c => c.nationality!))].sort();
 
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
+      <SEO 
+        title={`Inventario de Carros Usados ${makeFilter !== 'All' ? makeFilter : ''}`} 
+        description={`Explora nuestro inventario de ${filteredCars.length} carros usados en Cúcuta. Filtra por marca, precio, año y más.`}
+      />
       <div className="max-w-7xl mx-auto">
         <div className="mb-12">
           <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4">INVENTARIO</h1>
@@ -1577,23 +1701,145 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
 
                 <div>
                   <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Marca</label>
-                  <div className="flex flex-wrap gap-2">
+                  <select 
+                    value={makeFilter}
+                    onChange={(e) => setMakeFilter(e.target.value)}
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-600 transition-all font-bold"
+                  >
                     {makes.map(make => (
+                      <option key={make} value={make}>{make === "All" ? "Todas las Marcas" : make}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Tipo de Vehículo</label>
+                  <select 
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-600 transition-all font-bold"
+                  >
+                    {types.map(t => (
+                      <option key={t} value={t}>{t === "All" ? "Todos los Tipos" : t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Transmisión</label>
+                  <div className="flex flex-wrap gap-2">
+                    {transmissions.map(t => (
                       <button
-                        key={make}
-                        onClick={() => setMakeFilter(make)}
+                        key={t}
+                        onClick={() => setTransmissionFilter(t)}
                         className={cn(
-                          "px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                          makeFilter === make 
+                          "px-4 py-2 rounded-xl text-[10px] font-bold transition-all",
+                          transmissionFilter === t 
                             ? "bg-black text-white shadow-lg shadow-black/20" 
                             : "bg-zinc-50 text-zinc-500 hover:bg-zinc-100"
                         )}
                       >
-                        {make === "All" ? "Todas" : make}
+                        {t === "All" ? "Todas" : t}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Rango de Precio (Millones)</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-xs font-bold"
+                      value={priceRange[0] / 1000000}
+                      onChange={(e) => setPriceRange([parseInt(e.target.value) * 1000000 || 0, priceRange[1]])}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-xs font-bold"
+                      value={priceRange[1] / 1000000}
+                      onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) * 1000000 || 500000000])}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Año</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="number"
+                      placeholder="Desde"
+                      className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-xs font-bold"
+                      value={yearRange[0]}
+                      onChange={(e) => setYearRange([parseInt(e.target.value) || 1980, yearRange[1]])}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Hasta"
+                      className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-xs font-bold"
+                      value={yearRange[1]}
+                      onChange={(e) => setYearRange([yearRange[0], parseInt(e.target.value) || 2026])}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Combustible</label>
+                  <div className="flex flex-wrap gap-2">
+                    {fuels.map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setFuelFilter(f)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-[10px] font-bold transition-all",
+                          fuelFilter === f 
+                            ? "bg-black text-white shadow-lg shadow-black/20" 
+                            : "bg-zinc-50 text-zinc-500 hover:bg-zinc-100"
+                        )}
+                      >
+                        {f === "All" ? "Todos" : f === "Gasoline" ? "Gasolina" : f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Nacionalidad</label>
+                  <div className="flex flex-wrap gap-2">
+                    {nationalities.map(n => (
+                      <button
+                        key={n}
+                        onClick={() => setNationalityFilter(n)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-[10px] font-bold transition-all",
+                          nationalityFilter === n 
+                            ? "bg-black text-white shadow-lg shadow-black/20" 
+                            : "bg-zinc-50 text-zinc-500 hover:bg-zinc-100"
+                        )}
+                      >
+                        {n === "All" ? "Todas" : n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setSearch("");
+                    setMakeFilter("All");
+                    setTypeFilter("All");
+                    setTransmissionFilter("All");
+                    setFuelFilter("All");
+                    setNationalityFilter("All");
+                    setPriceRange([0, 500000000]);
+                    setYearRange([1980, 2026]);
+                  }}
+                  className="w-full py-3 text-xs font-bold text-red-600 hover:bg-red-50 rounded-2xl transition-all"
+                >
+                  Limpiar Filtros
+                </button>
               </div>
             </div>
           </div>
@@ -1662,6 +1908,14 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
 
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-white">
+      {car && (
+        <SEO 
+          title={`${car.make} ${car.model} ${car.year}`} 
+          description={`Compra este ${car.make} ${car.model} ${car.year} en Cúcuta. ${car.mileage.toLocaleString()} km, transmisión ${car.transmission}, combustible ${car.fuel_type}. ¡Contáctanos ahora!`}
+          image={car.image_url}
+          url={`https://www.autosya.com.co/car/${car.id}`}
+        />
+      )}
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           <div className="space-y-8">
@@ -1800,6 +2054,8 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
 }
 
 function Footer() {
+  const popularMakes = ["Toyota", "Chevrolet", "Renault", "Mazda", "Nissan", "Kia", "Suzuki", "Ford"];
+
   return (
     <footer className="bg-zinc-950 text-white py-20 px-6">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
@@ -1825,31 +2081,42 @@ function Footer() {
           </div>
         </div>
         <div>
+          <h4 className="font-bold mb-6 text-lg">Marcas Populares</h4>
+          <ul className="grid grid-cols-2 gap-4 text-zinc-500">
+            {popularMakes.map(make => (
+              <li key={make}>
+                <Link to={`/inventory?make=${make}`} className="hover:text-white transition-colors text-sm">
+                  {make} Usados
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
           <h4 className="font-bold mb-6 text-lg">Enlaces Rápidos</h4>
           <ul className="space-y-4 text-zinc-500">
-            <li><Link to="/inventory" className="hover:text-white transition-colors">Inventario</Link></li>
+            <li><Link to="/inventory" className="hover:text-white transition-colors">Inventario Cúcuta</Link></li>
             <li><Link to="/sell" className="hover:text-white transition-colors">Vende tu Carro</Link></li>
             <li><Link to="/services" className="hover:text-white transition-colors">Servicios</Link></li>
             <li><Link to="/about" className="hover:text-white transition-colors">Nosotros</Link></li>
           </ul>
         </div>
-        <div>
-          <h4 className="font-bold mb-6 text-lg">Boletín</h4>
-          <p className="text-zinc-500 text-sm mb-4">Recibe las últimas ofertas y noticias del mundo automotriz.</p>
-          <div className="flex gap-2">
-            <input 
-              type="email" 
-              placeholder="Correo electrónico" 
-              className="bg-white/5 border-none rounded-xl px-4 py-3 text-sm flex-1 focus:ring-2 focus:ring-red-600"
-            />
-            <button className="bg-red-600 p-3 rounded-xl hover:bg-red-700 transition-colors">
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
       </div>
-      <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/5 text-center text-zinc-600 text-sm">
-        © 2026 Autosya. Todos los derechos reservados.
+      
+      {/* SEO Text Block */}
+      <div className="max-w-7xl mx-auto mt-16 p-8 bg-white/5 rounded-3xl border border-white/10">
+        <h5 className="text-zinc-300 font-bold mb-4 text-sm uppercase tracking-widest">Autosya Cúcuta - Tu Concesionario de Confianza</h5>
+        <p className="text-zinc-500 text-xs leading-relaxed">
+          En Autosya nos especializamos en la compra y venta de carros usados en Cúcuta, Norte de Santander. 
+          Contamos con un amplio inventario de camionetas 4x4, automóviles familiares y vehículos de carga. 
+          Si buscas Toyota usados en Cúcuta, Renault Stepway, Chevrolet Onix o camionetas Ford, somos tu mejor opción. 
+          Ofrecemos financiamiento inmediato, peritaje certificado y los precios más bajos de la región. 
+          Visítanos y descubre por qué somos el concesionario líder en Cúcuta.
+        </p>
+      </div>
+
+      <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-white/5 text-center text-zinc-600 text-sm">
+        © 2026 Autosya. Todos los derechos reservados. | Carros Usados Cúcuta | Venta de Vehículos
       </div>
     </footer>
   );
