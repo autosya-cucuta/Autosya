@@ -1,7 +1,54 @@
-import React, { useState, useEffect, FormEvent } from "react";
+import React, { useState, useEffect, FormEvent, useRef } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Search, Car as CarIcon, Shield, Zap, Menu, X, Filter, ChevronRight, Phone, Mail, MapPin, Sparkles, AlertCircle, User, LogOut, ChevronLeft, MessageCircle, Eye, EyeOff, Settings, Heart, History, ChevronDown } from "lucide-react";
+import { 
+  Search, 
+  Car as CarIcon, 
+  Shield, 
+  Zap, 
+  Menu, 
+  X, 
+  Filter, 
+  ChevronRight, 
+  Phone, 
+  Mail, 
+  MapPin, 
+  Sparkles, 
+  AlertCircle, 
+  User, 
+  LogOut, 
+  ChevronLeft, 
+  MessageCircle, 
+  Eye, 
+  EyeOff, 
+  Settings, 
+  Heart, 
+  History, 
+  ChevronDown,
+  Upload,
+  Trash2,
+  GripVertical,
+  Plus,
+  CheckCircle2,
+  Image as ImageIcon
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { 
+  DndContext, 
+  closestCenter, 
+  KeyboardSensor, 
+  PointerSensor, 
+  useSensor, 
+  useSensors,
+  DragEndEvent
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { cn } from "./lib/utils";
 import type { Car } from "./lib/utils";
 
@@ -348,15 +395,206 @@ function AIAssistant({ inventory }: { inventory: Car[] }) {
   );
 }
 
+// --- Image Upload Components ---
+
+interface SortableImageProps {
+  id: string;
+  url: string;
+  onRemove: (id: string) => void;
+  isPrimary: boolean;
+  key?: string;
+}
+
+function SortableImage({ id, url, onRemove, isPrimary }: SortableImageProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 1,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className={cn(
+        "relative group aspect-square rounded-2xl overflow-hidden border-2 transition-all",
+        isPrimary ? "border-red-600 shadow-lg shadow-red-600/10" : "border-zinc-100 hover:border-zinc-200"
+      )}
+    >
+      <img src={url} alt="Preview" className="w-full h-full object-cover" />
+      
+      {/* Drag Handle */}
+      <div 
+        {...attributes} 
+        {...listeners} 
+        className="absolute top-2 left-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="w-4 h-4 text-zinc-600" />
+      </div>
+
+      {/* Remove Button */}
+      <button 
+        onClick={() => onRemove(id)}
+        className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+
+      {isPrimary && (
+        <div className="absolute bottom-0 left-0 right-0 bg-red-600 text-white text-[10px] font-bold py-1 text-center uppercase tracking-widest">
+          Principal
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImageUpload({ 
+  images, 
+  setImages, 
+  onUploadToDrive, 
+  isUploadingToDrive 
+}: { 
+  images: { id: string; file: File; preview: string }[]; 
+  setImages: React.Dispatch<React.SetStateAction<{ id: string; file: File; preview: string }[]>>;
+  onUploadToDrive: () => void;
+  isUploadingToDrive: boolean;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setImages((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []) as File[];
+    addFiles(files);
+  };
+
+  const addFiles = (files: File[]) => {
+    const newImages = files.map(file => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+    setImages(prev => [...prev, ...newImages]);
+  };
+
+  const removeImage = (id: string) => {
+    setImages(prev => {
+      const filtered = prev.filter(img => img.id !== id);
+      // Clean up the preview URL
+      const removed = prev.find(img => img.id === id);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return filtered;
+    });
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files) as File[];
+    addFiles(files);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div 
+        onDragOver={e => e.preventDefault()}
+        onDrop={handleDrop}
+        className="border-2 border-dashed border-zinc-200 rounded-[32px] p-12 text-center hover:border-red-600 hover:bg-red-50/30 transition-all group cursor-pointer relative"
+      >
+        <input 
+          type="file" 
+          multiple 
+          accept="image/*" 
+          onChange={onFileChange}
+          className="absolute inset-0 opacity-0 cursor-pointer"
+        />
+        <div className="w-16 h-16 bg-zinc-100 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+          <Upload className="w-8 h-8 text-zinc-400 group-hover:text-red-600" />
+        </div>
+        <h3 className="text-xl font-bold text-zinc-900 mb-2">Sube las fotos de tu vehículo</h3>
+        <p className="text-zinc-500 max-w-xs mx-auto">Arrastra y suelta tus imágenes aquí o haz clic para seleccionarlas.</p>
+      </div>
+
+      {images.length > 0 && (
+        <div className="bg-white p-8 rounded-[32px] border border-zinc-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-red-600" />
+              <h4 className="font-bold text-zinc-900">Imágenes Seleccionadas ({images.length})</h4>
+            </div>
+            <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Arrastra para reordenar</p>
+          </div>
+
+          <DndContext 
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext 
+              items={images.map(img => img.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {images.map((img, index) => (
+                  <SortableImage 
+                    key={img.id} 
+                    id={img.id} 
+                    url={img.preview} 
+                    onRemove={removeImage}
+                    isPrimary={index === 0}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SellCar() {
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [images, setImages] = useState<{ id: string; file: File; preview: string }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [googleTokens, setGoogleTokens] = useState<any>(() => {
+    const saved = localStorage.getItem("google_drive_tokens");
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [formData, setFormData] = useState({
     make: "", model: "", year: "", price: "", mileage: "", 
-    transmission: "Automatic", fuel_type: "Gasoline", image_url: "", description: "",
+    transmission: "Automatic", fuel_type: "Gasoline", description: "",
     color: "", phone: "", engine: "", plate_last_digit: "", plate_city: "",
-    soat_until: "", techno_until: "", whatsapp: "", plate: ""
+    soat_until: "", techno_until: "", whatsapp: "", plate: "",
+    vehicle_type: "Automovil", nationality: "Colombiano", location_city: "Cúcuta"
   });
+  
   const [isEstimating, setIsEstimating] = useState(false);
   const [estimate, setEstimate] = useState("");
   const navigate = useNavigate();
@@ -366,7 +604,27 @@ function SellCar() {
       setUser(session?.user ?? null);
       setLoadingUser(false);
     });
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        const tokens = event.data.tokens;
+        setGoogleTokens(tokens);
+        localStorage.setItem("google_drive_tokens", JSON.stringify(tokens));
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  const handleConnectDrive = async () => {
+    try {
+      const res = await fetch('/api/auth/google/url');
+      const { url } = await res.json();
+      window.open(url, 'google_auth', 'width=600,height=700');
+    } catch (error) {
+      alert("Error al conectar con Google Drive");
+    }
+  };
 
   const handleEstimate = async () => {
     if (!formData.make || !formData.model) return alert("Por favor ingresa marca y modelo primero");
@@ -384,24 +642,50 @@ function SellCar() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Debes iniciar sesión para publicar un vehículo.");
+    if (images.length === 0) return alert("Por favor sube al menos una imagen.");
+    if (!googleTokens) return alert("Por favor conecta tu cuenta de Google Drive para subir las imágenes.");
 
-    const { data, error } = await supabase
-      .from("cars")
-      .insert([{
-        ...formData,
-        year: parseInt(formData.year),
-        price: parseInt(formData.price),
-        mileage: parseInt(formData.mileage),
-        user_id: user.id
-      }])
-      .select()
-      .single();
+    setIsUploading(true);
+    try {
+      // 1. Upload images to Google Drive
+      const uploadFormData = new FormData();
+      images.forEach(img => uploadFormData.append("files", img.file));
+      uploadFormData.append("tokens", JSON.stringify(googleTokens));
+      uploadFormData.append("folderName", `${formData.make} ${formData.model} ${formData.year} - ${user.email}`);
 
-    if (error) {
-      alert("Error al publicar el carro: " + error.message);
-    } else {
-      alert("¡Carro publicado con éxito!");
+      const uploadRes = await fetch("/api/upload-to-drive", {
+        method: "POST",
+        body: uploadFormData
+      });
+
+      if (!uploadRes.ok) throw new Error("Error al subir imágenes a Google Drive");
+      
+      const { urls } = await uploadRes.json();
+
+      // 2. Save to Supabase
+      const { error } = await supabase
+        .from("cars")
+        .insert([{
+          ...formData,
+          year: parseInt(formData.year),
+          price: parseInt(formData.price),
+          mileage: parseInt(formData.mileage),
+          image_url: urls[0], // First image is primary
+          all_images: urls,
+          user_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      alert("¡Vehículo publicado con éxito!");
       navigate("/inventory");
+    } catch (error: any) {
+      console.error(error);
+      alert("Error al publicar: " + error.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -429,148 +713,278 @@ function SellCar() {
 
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
-      <div className="max-w-4xl mx-auto">
+      <SEO 
+        title="Vender mi Carro" 
+        description="Publica tu vehículo en Autosya Cúcuta. Proceso rápido, seguro y con gran alcance."
+      />
+      <div className="max-w-5xl mx-auto">
         <div className="mb-12 text-center">
-          <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4">VENDE TU CARRO</h1>
-          <p className="text-zinc-500 font-medium">Publica tu vehículo y llega a miles de compradores potenciales al instante.</p>
+          <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4 uppercase">Vende tu Vehículo</h1>
+          <p className="text-zinc-500 font-medium">Completa los detalles y llega a miles de compradores en Cúcuta y Norte de Santander.</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="bg-white p-10 rounded-[40px] shadow-sm border border-zinc-100 space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Marca</label>
-                  <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.make} onChange={e => setFormData({...formData, make: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Modelo</label>
-                  <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Año</label>
-                  <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Precio ($)</label>
-                  <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Kilometraje (km)</label>
-                  <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.mileage} onChange={e => setFormData({...formData, mileage: e.target.value})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Transmisión</label>
-                  <select 
-                    required 
-                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" 
-                    value={formData.transmission} 
-                    onChange={e => setFormData({...formData, transmission: e.target.value})}
-                  >
-                    <option value="Automatic">Automática</option>
-                    <option value="Manual">Manual</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Combustible</label>
-                  <select 
-                    required 
-                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" 
-                    value={formData.fuel_type} 
-                    onChange={e => setFormData({...formData, fuel_type: e.target.value})}
-                  >
-                    <option value="Gasoline">Gasolina</option>
-                    <option value="Diesel">Diesel</option>
-                    <option value="Electric">Eléctrico</option>
-                    <option value="Hybrid">Híbrido</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">URL de la Imagen</label>
-                <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" placeholder="https://..." value={formData.image_url} onChange={e => setFormData({...formData, image_url: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Descripción</label>
-                <textarea required rows={4} className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+            <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Image Upload Section */}
+              <div className="bg-white p-10 rounded-[40px] shadow-sm border border-zinc-100">
+                <h3 className="text-sm font-bold text-zinc-900 mb-8 uppercase tracking-widest flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-red-600" />
+                  Galería de Fotos
+                </h3>
+                <ImageUpload 
+                  images={images} 
+                  setImages={setImages} 
+                  onUploadToDrive={handleConnectDrive}
+                  isUploadingToDrive={isUploading}
+                />
+                
+                {!googleTokens ? (
+                  <div className="mt-8 p-6 bg-amber-50 rounded-3xl border border-amber-100 flex items-start gap-4">
+                    <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
+                    <div>
+                      <h4 className="font-bold text-amber-900 mb-1">Conexión requerida</h4>
+                      <p className="text-sm text-amber-700 mb-4">Para almacenar tus fotos de forma segura, necesitamos que conectes tu cuenta de Google Drive.</p>
+                      <button 
+                        type="button"
+                        onClick={handleConnectDrive}
+                        className="bg-amber-600 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-amber-700 transition-all flex items-center gap-2"
+                      >
+                        Conectar Google Drive
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-8 p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-emerald-900">Google Drive Conectado</h4>
+                        <p className="text-xs text-emerald-700">Tus fotos se subirán automáticamente a tu Drive.</p>
+                      </div>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setGoogleTokens(null);
+                        localStorage.removeItem("google_drive_tokens");
+                      }}
+                      className="text-xs font-bold text-red-600 hover:underline"
+                    >
+                      Desconectar
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="pt-6 border-t border-zinc-100">
-                <h3 className="text-sm font-bold text-zinc-900 mb-6 uppercase tracking-widest">Información Adicional</h3>
-                <div className="grid grid-cols-2 gap-6 mb-6">
+              {/* Basic Info Section */}
+              <div className="bg-white p-10 rounded-[40px] shadow-sm border border-zinc-100 space-y-8">
+                <h3 className="text-sm font-bold text-zinc-900 mb-2 uppercase tracking-widest flex items-center gap-2">
+                  <CarIcon className="w-5 h-5 text-red-600" />
+                  Información Básica
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Marca</label>
+                    <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.make} onChange={e => setFormData({...formData, make: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Modelo</label>
+                    <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Año</label>
+                    <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Precio ($)</label>
+                    <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Kilometraje (km)</label>
+                    <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.mileage} onChange={e => setFormData({...formData, mileage: e.target.value})} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Tipo de Vehículo</label>
+                    <select 
+                      required 
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                      value={formData.vehicle_type} 
+                      onChange={e => setFormData({...formData, vehicle_type: e.target.value})}
+                    >
+                      <option value="Automovil">Automóvil</option>
+                      <option value="Camioneta 4x4">Camioneta 4x4</option>
+                      <option value="Camioneta 4x2">Camioneta 4x2</option>
+                      <option value="SUV">SUV</option>
+                      <option value="Pick-up">Pick-up</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Nacionalidad</label>
+                    <select 
+                      required 
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                      value={formData.nationality} 
+                      onChange={e => setFormData({...formData, nationality: e.target.value})}
+                    >
+                      <option value="Colombiano">Colombiano</option>
+                      <option value="Venezolano">Venezolano</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Transmisión</label>
+                    <select 
+                      required 
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                      value={formData.transmission} 
+                      onChange={e => setFormData({...formData, transmission: e.target.value})}
+                    >
+                      <option value="Automatic">Automática</option>
+                      <option value="Manual">Manual</option>
+                      <option value="Dual">Dual / Secuencial</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Combustible</label>
+                    <select 
+                      required 
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                      value={formData.fuel_type} 
+                      onChange={e => setFormData({...formData, fuel_type: e.target.value})}
+                    >
+                      <option value="Gasoline">Gasolina</option>
+                      <option value="Diesel">Diesel</option>
+                      <option value="Electric">Eléctrico</option>
+                      <option value="Hybrid">Híbrido</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Descripción</label>
+                  <textarea required rows={4} className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" placeholder="Describe el estado del vehículo, equipamiento, mantenimiento..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                </div>
+              </div>
+
+              {/* Technical Details Section */}
+              <div className="bg-white p-10 rounded-[40px] shadow-sm border border-zinc-100 space-y-8">
+                <h3 className="text-sm font-bold text-zinc-900 mb-2 uppercase tracking-widest flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-red-600" />
+                  Detalles Técnicos y Documentación
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Color</label>
-                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Motor / Cilindrada</label>
-                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" placeholder="Ej: 2.0L" value={formData.engine} onChange={e => setFormData({...formData, engine: e.target.value})} />
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" placeholder="Ej: 2.0L Turbo" value={formData.engine} onChange={e => setFormData({...formData, engine: e.target.value})} />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-6 mb-6">
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Placa</label>
-                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" placeholder="ABC-123" value={formData.plate} onChange={e => setFormData({...formData, plate: e.target.value})} />
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" placeholder="ABC-123" value={formData.plate} onChange={e => setFormData({...formData, plate: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Último Dígito</label>
-                    <input type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.plate_last_digit} onChange={e => setFormData({...formData, plate_last_digit: e.target.value})} />
+                    <input type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.plate_last_digit} onChange={e => setFormData({...formData, plate_last_digit: e.target.value})} />
                   </div>
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Ciudad Placa</label>
-                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.plate_city} onChange={e => setFormData({...formData, plate_city: e.target.value})} />
+                    <input className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.plate_city} onChange={e => setFormData({...formData, plate_city: e.target.value})} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-6 mb-6">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">SOAT hasta</label>
-                    <input type="date" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.soat_until} onChange={e => setFormData({...formData, soat_until: e.target.value})} />
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">SOAT Vence</label>
+                    <input type="date" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.soat_until} onChange={e => setFormData({...formData, soat_until: e.target.value})} />
                   </div>
                   <div>
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Tecno hasta</label>
-                    <input type="date" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.techno_until} onChange={e => setFormData({...formData, techno_until: e.target.value})} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Teléfono</label>
-                    <input type="tel" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">WhatsApp</label>
-                    <input type="tel" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} />
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Tecno Vence</label>
+                    <input type="date" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.techno_until} onChange={e => setFormData({...formData, techno_until: e.target.value})} />
                   </div>
                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-red-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all">
-                Publicar Vehículo
+              {/* Contact Section */}
+              <div className="bg-white p-10 rounded-[40px] shadow-sm border border-zinc-100 space-y-8">
+                <h3 className="text-sm font-bold text-zinc-900 mb-2 uppercase tracking-widest flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-red-600" />
+                  Información de Contacto
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Teléfono</label>
+                    <input type="tel" required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">WhatsApp</label>
+                    <input type="tel" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Ciudad de Ubicación</label>
+                  <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.location_city} onChange={e => setFormData({...formData, location_city: e.target.value})} />
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isUploading}
+                className="w-full bg-red-600 text-white py-6 rounded-[32px] font-bold text-xl hover:bg-red-700 transition-all shadow-xl shadow-red-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Publicando...
+                  </>
+                ) : (
+                  "Publicar Vehículo Ahora"
+                )}
               </button>
             </form>
           </div>
 
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-zinc-900 text-white p-8 rounded-[40px] shadow-xl">
+            <div className="bg-zinc-900 text-white p-10 rounded-[40px] shadow-xl sticky top-32">
               <div className="flex items-center gap-3 mb-6">
                 <Sparkles className="text-red-400 w-6 h-6" />
-                <h3 className="font-bold">Valoración IA</h3>
+                <h3 className="font-bold text-xl">Valoración IA</h3>
               </div>
-              <p className="text-zinc-400 text-sm mb-6">Obtén una estimación instantánea del valor de tu carro basada en datos actuales del mercado.</p>
+              <p className="text-zinc-400 text-sm mb-8 leading-relaxed">¿No estás seguro del precio? Nuestra IA analiza el mercado en tiempo real para darte una recomendación justa.</p>
               <button 
                 onClick={handleEstimate}
                 disabled={isEstimating}
-                className="w-full bg-white/10 hover:bg-white/20 border border-white/10 py-3 rounded-2xl text-sm font-bold transition-all disabled:opacity-50"
+                className="w-full bg-white/10 hover:bg-white/20 border border-white/10 py-4 rounded-2xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isEstimating ? "Calculando..." : "Obtener Estimación"}
               </button>
               {estimate && (
-                <div className="mt-6 p-4 bg-white/5 rounded-2xl text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-8 p-6 bg-white/5 rounded-3xl text-sm text-zinc-300 leading-relaxed border border-white/5"
+                >
                   {estimate}
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
@@ -874,7 +1288,7 @@ function Navbar({ inventory }: { inventory: Car[] }) {
                           >
                             <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-100">
                               <img 
-                                src={car.image_url} 
+                                src={car.image_url || null} 
                                 alt={car.model} 
                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                               />
@@ -1069,7 +1483,7 @@ function Navbar({ inventory }: { inventory: Car[] }) {
                           }}
                           className="flex items-center gap-3 p-3 hover:bg-white transition-colors"
                         >
-                          <img src={car.image_url} className="w-16 h-10 object-cover rounded" alt={car.model} />
+                          <img src={car.image_url || null} className="w-16 h-10 object-cover rounded" alt={car.model} />
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-zinc-900 truncate">{car.make} {car.model}</div>
                             <div className="text-red-600 font-black text-sm">$ {car.price.toLocaleString()}</div>
@@ -1178,7 +1592,7 @@ function Favorites({ inventory, favorites, onToggleFavorite }: { inventory: Car[
   );
 }
 
-function MyListings({ inventory, favorites, onToggleFavorite }: { inventory: Car[]; favorites: number[]; onToggleFavorite: (id: number) => void }) {
+function MyListings({ inventory, favorites, onToggleFavorite, onRefresh }: { inventory: Car[]; favorites: number[]; onToggleFavorite: (id: number) => void; onRefresh: () => void }) {
   const [user, setUser] = useState<any>(null);
   
   useEffect(() => {
@@ -1195,6 +1609,10 @@ function MyListings({ inventory, favorites, onToggleFavorite }: { inventory: Car
         <div className="mb-12">
           <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4">MIS PUBLICACIONES</h1>
           <p className="text-zinc-500 font-medium">Gestiona los vehículos que has puesto a la venta.</p>
+          <div className="mt-4 flex gap-4 text-xs font-bold text-zinc-400 uppercase tracking-widest">
+            <div className="flex items-center gap-2"><Zap className="w-4 h-4 text-black" /> Subir (Mover al inicio)</div>
+            <div className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> Destacar (Prioridad máxima)</div>
+          </div>
         </div>
 
         {myListings.length > 0 ? (
@@ -1205,6 +1623,8 @@ function MyListings({ inventory, favorites, onToggleFavorite }: { inventory: Car
                 car={car} 
                 isFavorite={favorites.includes(car.id)} 
                 onToggleFavorite={onToggleFavorite} 
+                showManagementActions={true}
+                onRefresh={onRefresh}
               />
             ))}
           </div>
@@ -1357,7 +1777,60 @@ function SettingsPage() {
     </div>
   );
 }
-function CarCard({ car, isFavorite, onToggleFavorite }: { car: Car; isFavorite?: boolean; onToggleFavorite?: (id: number) => void; key?: any }) {
+function CarCard({ 
+  car, 
+  isFavorite, 
+  onToggleFavorite, 
+  showManagementActions = false,
+  onRefresh
+}: { 
+  car: Car; 
+  isFavorite?: boolean; 
+  onToggleFavorite?: (id: number) => void; 
+  showManagementActions?: boolean;
+  onRefresh?: () => void;
+  key?: any 
+}) {
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleBump = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase
+        .from("cars")
+        .update({ created_at: new Date().toISOString() })
+        .eq("id", car.id);
+      if (error) throw error;
+      onRefresh?.();
+    } catch (err) {
+      console.error(err);
+      alert("Error al subir el anuncio");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleToggleFeatured = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase
+        .from("cars")
+        .update({ is_featured: !car.is_featured })
+        .eq("id", car.id);
+      if (error) throw error;
+      onRefresh?.();
+    } catch (err) {
+      console.error(err);
+      alert("Error al destacar el anuncio. Asegúrate de que la columna 'is_featured' existe en la base de datos.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="group bg-white rounded-3xl overflow-hidden border border-zinc-100 shadow-sm hover:shadow-2xl hover:shadow-black/5 transition-all duration-500 relative">
       <button 
@@ -1373,10 +1846,35 @@ function CarCard({ car, isFavorite, onToggleFavorite }: { car: Car; isFavorite?:
       >
         <Heart className={cn("w-5 h-5", isFavorite && "fill-current")} />
       </button>
+      
+      {showManagementActions && (
+        <div className="absolute top-4 left-4 z-10 flex gap-2">
+          <button 
+            onClick={handleBump}
+            disabled={isUpdating}
+            className="bg-black/80 backdrop-blur-md text-white p-2 rounded-full hover:bg-black transition-all"
+            title="Subir anuncio (Mover al inicio)"
+          >
+            <Zap className={cn("w-4 h-4", isUpdating && "animate-pulse")} />
+          </button>
+          <button 
+            onClick={handleToggleFeatured}
+            disabled={isUpdating}
+            className={cn(
+              "backdrop-blur-md p-2 rounded-full transition-all",
+              car.is_featured ? "bg-amber-500 text-white" : "bg-white/80 text-zinc-400 hover:text-amber-500"
+            )}
+            title={car.is_featured ? "Quitar de destacados" : "Marcar como destacado"}
+          >
+            <Sparkles className={cn("w-4 h-4", isUpdating && "animate-pulse")} />
+          </button>
+        </div>
+      )}
+
       <Link to={`/car/${car.id}`}>
         <div className="relative aspect-[16/10] overflow-hidden">
           <img
-            src={car.image_url}
+            src={car.image_url || null}
             alt={`${car.make} ${car.model}`}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             referrerPolicy="no-referrer"
@@ -1604,6 +2102,7 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
   const [nationalityFilter, setNationalityFilter] = useState("All");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 500000000]);
   const [yearRange, setYearRange] = useState<[number, number]>([1980, 2026]);
+  const [sortBy, setSortBy] = useState("newest");
 
   useEffect(() => {
     const querySearch = searchParams.get("search");
@@ -1654,8 +2153,27 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
     result = result.filter(c => c.price >= priceRange[0] && c.price <= priceRange[1]);
     result = result.filter(c => c.year >= yearRange[0] && c.year <= yearRange[1]);
     
-    setFilteredCars(result);
-  }, [search, makeFilter, typeFilter, transmissionFilter, fuelFilter, nationalityFilter, priceRange, yearRange, cars]);
+    // Apply sorting
+    const sortedResult = [...result].sort((a, b) => {
+      // Always prioritize featured cars unless sorting by something else specifically?
+      // Actually, let's keep featured cars at top for "newest" only, or maybe always?
+      // User said "colocar unos carros al inicio", so featured should probably always be first.
+      if (a.is_featured && !b.is_featured) return -1;
+      if (!a.is_featured && b.is_featured) return 1;
+
+      switch (sortBy) {
+        case "price_asc": return a.price - b.price;
+        case "price_desc": return b.price - a.price;
+        case "year_desc": return b.year - a.year;
+        case "mileage_asc": return a.mileage - b.mileage;
+        case "newest":
+        default:
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      }
+    });
+    
+    setFilteredCars(sortedResult);
+  }, [search, makeFilter, typeFilter, transmissionFilter, fuelFilter, nationalityFilter, priceRange, yearRange, sortBy, cars]);
 
   const makes = ["All", ...new Set(cars.map(c => c.make))].sort();
   const types = ["All", ...new Set(cars.filter(c => c.vehicle_type).map(c => c.vehicle_type!))].sort();
@@ -1697,6 +2215,21 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Ordenar por</label>
+                  <select 
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-600 transition-all font-bold"
+                  >
+                    <option value="newest">Más recientes</option>
+                    <option value="price_asc">Precio: Menor a Mayor</option>
+                    <option value="price_desc">Precio: Mayor a Menor</option>
+                    <option value="year_desc">Año: Más nuevos</option>
+                    <option value="mileage_asc">Menor Kilometraje</option>
+                  </select>
                 </div>
 
                 <div>
@@ -1921,7 +2454,7 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
           <div className="space-y-8">
             <div className="aspect-[16/10] rounded-[40px] overflow-hidden shadow-2xl bg-zinc-100">
               <img
-                src={activeImage || car.image_url}
+                src={activeImage || car.image_url || null}
                 alt={car.model}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -1938,7 +2471,7 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
                       activeImage === img ? "border-red-600" : "border-transparent"
                     )}
                   >
-                    <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={img || null} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                 ))}
               </div>
@@ -2205,7 +2738,10 @@ export default function App() {
 
     async function fetchInventory() {
       try {
-        const { data, error: sbError } = await supabase.from("cars").select("*");
+        const { data, error: sbError } = await supabase
+          .from("cars")
+          .select("*")
+          .order("created_at", { ascending: false });
         if (sbError) throw sbError;
         if (data) setInventory(data);
       } catch (err: any) {
@@ -2215,6 +2751,19 @@ export default function App() {
     }
     fetchInventory();
   }, []);
+
+  const refreshInventory = async () => {
+    try {
+      const { data, error: sbError } = await supabase
+        .from("cars")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (sbError) throw sbError;
+      if (data) setInventory(data);
+    } catch (err: any) {
+      console.error("Failed to refresh inventory:", err);
+    }
+  };
 
   if (!isSupabaseConfigured) {
     return <ConfigError />;
@@ -2246,7 +2795,7 @@ export default function App() {
             <Route path="/car/:id" element={<CarDetail favorites={favorites} onToggleFavorite={toggleFavorite} />} />
             <Route path="/sell" element={<SellCar />} />
             <Route path="/favorites" element={<Favorites inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} />} />
-            <Route path="/my-listings" element={<MyListings inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} />} />
+            <Route path="/my-listings" element={<MyListings inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} onRefresh={refreshInventory} />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

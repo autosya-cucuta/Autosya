@@ -32,4 +32,7 @@ export interface Car {
   nationality?: string; // Colombiano | Venezolano
   owner_info?: string; // Private info
   location_city?: string; // City where vehicle is located
+  is_featured?: boolean; // Featured status
+  whatsapp?: string;
+  plate?: string;
 }
