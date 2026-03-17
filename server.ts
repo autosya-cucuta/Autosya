@@ -18,14 +18,14 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Google OAuth Setup
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL}/api/auth/google/callback`
-);
+// Google Service Account Setup
+const auth = new google.auth.JWT({
+  email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+  key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  scopes: ["https://www.googleapis.com/auth/drive.file"],
+});
 
-const SCOPES = ["https://www.googleapis.com/auth/drive.file"];
+const drive = google.drive({ version: "v3", auth });
 
 // Multer Setup for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -36,60 +36,20 @@ async function startServer() {
 
   app.use(express.json());
 
-  // --- Google OAuth Routes ---
-  app.get("/api/auth/google/url", (req, res) => {
-    const url = oauth2Client.generateAuthUrl({
-      access_type: "offline",
-      scope: SCOPES,
-      prompt: "consent",
-    });
-    res.json({ url });
-  });
-
-  app.get("/api/auth/google/callback", async (req, res) => {
-    const { code } = req.query;
-    try {
-      const { tokens } = await oauth2Client.getToken(code as string);
-      // In a real app, store these tokens securely (e.g., in Supabase linked to user)
-      // For this demo, we'll send them back to the client to store in localStorage (not ideal but works for demo)
-      res.send(`
-        <html>
-          <body>
-            <script>
-              if (window.opener) {
-                window.opener.postMessage({ 
-                  type: 'GOOGLE_AUTH_SUCCESS', 
-                  tokens: ${JSON.stringify(tokens)} 
-                }, '*');
-                window.close();
-              } else {
-                window.location.href = '/';
-              }
-            </script>
-            <p>Autenticación exitosa. Esta ventana se cerrará automáticamente.</p>
-          </body>
-        </html>
-      `);
-    } catch (error) {
-      console.error("Error getting tokens:", error);
-      res.status(500).send("Error en la autenticación");
-    }
-  });
-
-  // --- File Upload to Google Drive ---
+  // --- File Upload to Google Drive (Using Owner's Service Account) ---
   app.post("/api/upload-to-drive", upload.array("files"), async (req, res) => {
-    const { tokens, folderName } = req.body;
+    const { folderName } = req.body;
     const files = req.files as Express.Multer.File[];
 
-    if (!tokens || !files || files.length === 0) {
-      return res.status(400).json({ error: "Faltan tokens o archivos" });
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "Faltan archivos" });
+    }
+
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY) {
+      return res.status(500).json({ error: "Credenciales de Google Drive no configuradas en el servidor" });
     }
 
     try {
-      const auth = new google.auth.OAuth2();
-      auth.setCredentials(JSON.parse(tokens));
-      const drive = google.drive({ version: "v3", auth });
-
       // 1. Create a folder for the ad
       const folderMetadata = {
         name: folderName || "Nuevo Anuncio",
@@ -119,7 +79,7 @@ async function startServer() {
         const uploadedFile = await drive.files.create({
           requestBody: fileMetadata,
           media: media,
-          fields: "id, webViewLink, webContentLink",
+          fields: "id",
         });
 
         // Make file public

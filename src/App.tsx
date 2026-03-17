@@ -582,21 +582,16 @@ function SellCar() {
   const [loadingUser, setLoadingUser] = useState(true);
   const [images, setImages] = useState<{ id: string; file: File; preview: string }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [googleTokens, setGoogleTokens] = useState<any>(() => {
-    const saved = localStorage.getItem("google_drive_tokens");
-    return saved ? JSON.parse(saved) : null;
-  });
 
   const [formData, setFormData] = useState({
     make: "", model: "", year: "", price: "", mileage: "", 
     transmission: "Automatic", fuel_type: "Gasoline", description: "",
     color: "", phone: "", engine: "", plate_last_digit: "", plate_city: "",
     soat_until: "", techno_until: "", whatsapp: "", plate: "",
-    vehicle_type: "Automovil", nationality: "Colombiano", location_city: "Cúcuta"
+    vehicle_type: "Automovil", nationality: "Colombiano", location_city: "Cúcuta",
+    owner_info: ""
   });
   
-  const [isEstimating, setIsEstimating] = useState(false);
-  const [estimate, setEstimate] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -604,53 +599,18 @@ function SellCar() {
       setUser(session?.user ?? null);
       setLoadingUser(false);
     });
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        const tokens = event.data.tokens;
-        setGoogleTokens(tokens);
-        localStorage.setItem("google_drive_tokens", JSON.stringify(tokens));
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
   }, []);
-
-  const handleConnectDrive = async () => {
-    try {
-      const res = await fetch('/api/auth/google/url');
-      const { url } = await res.json();
-      window.open(url, 'google_auth', 'width=600,height=700');
-    } catch (error) {
-      alert("Error al conectar con Google Drive");
-    }
-  };
-
-  const handleEstimate = async () => {
-    if (!formData.make || !formData.model) return alert("Por favor ingresa marca y modelo primero");
-    setIsEstimating(true);
-    try {
-      const res = await estimateCarValue(`${formData.year} ${formData.make} ${formData.model} con ${formData.mileage}km`);
-      setEstimate(res || "");
-    } catch (error) {
-      alert("El servicio de valoración no está disponible actualmente.");
-    } finally {
-      setIsEstimating(false);
-    }
-  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return alert("Debes iniciar sesión para publicar un vehículo.");
     if (images.length === 0) return alert("Por favor sube al menos una imagen.");
-    if (!googleTokens) return alert("Por favor conecta tu cuenta de Google Drive para subir las imágenes.");
 
     setIsUploading(true);
     try {
       // 1. Upload images to Google Drive
       const uploadFormData = new FormData();
       images.forEach(img => uploadFormData.append("files", img.file));
-      uploadFormData.append("tokens", JSON.stringify(googleTokens));
       uploadFormData.append("folderName", `${formData.make} ${formData.model} ${formData.year} - ${user.email}`);
 
       const uploadRes = await fetch("/api/upload-to-drive", {
@@ -658,12 +618,15 @@ function SellCar() {
         body: uploadFormData
       });
 
-      if (!uploadRes.ok) throw new Error("Error al subir imágenes a Google Drive");
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json();
+        throw new Error(errorData.error || "Error al subir imágenes a Google Drive");
+      }
       
       const { urls } = await uploadRes.json();
 
       // 2. Save to Supabase
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("cars")
         .insert([{
           ...formData,
@@ -680,9 +643,13 @@ function SellCar() {
       if (error) throw error;
 
       alert("¡Vehículo publicado con éxito!");
-      navigate("/inventory");
+      if (data && data.id) {
+        navigate(`/car/${data.id}`);
+      } else {
+        navigate("/inventory");
+      }
     } catch (error: any) {
-      console.error(error);
+      console.error("Error en handleSubmit:", error);
       alert("Error al publicar: " + error.message);
     } finally {
       setIsUploading(false);
@@ -735,48 +702,9 @@ function SellCar() {
                 <ImageUpload 
                   images={images} 
                   setImages={setImages} 
-                  onUploadToDrive={handleConnectDrive}
+                  onUploadToDrive={() => {}}
                   isUploadingToDrive={isUploading}
                 />
-                
-                {!googleTokens ? (
-                  <div className="mt-8 p-6 bg-amber-50 rounded-3xl border border-amber-100 flex items-start gap-4">
-                    <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
-                    <div>
-                      <h4 className="font-bold text-amber-900 mb-1">Conexión requerida</h4>
-                      <p className="text-sm text-amber-700 mb-4">Para almacenar tus fotos de forma segura, necesitamos que conectes tu cuenta de Google Drive.</p>
-                      <button 
-                        type="button"
-                        onClick={handleConnectDrive}
-                        className="bg-amber-600 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-amber-700 transition-all flex items-center gap-2"
-                      >
-                        Conectar Google Drive
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-8 p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-emerald-900">Google Drive Conectado</h4>
-                        <p className="text-xs text-emerald-700">Tus fotos se subirán automáticamente a tu Drive.</p>
-                      </div>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setGoogleTokens(null);
-                        localStorage.removeItem("google_drive_tokens");
-                      }}
-                      className="text-xs font-bold text-red-600 hover:underline"
-                    >
-                      Desconectar
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Basic Info Section */}
@@ -789,11 +717,35 @@ function SellCar() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Marca</label>
-                    <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.make} onChange={e => setFormData({...formData, make: e.target.value})} />
+                    <select 
+                      required 
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                      value={formData.make} 
+                      onChange={e => setFormData({...formData, make: e.target.value, model: ""})}
+                    >
+                      <option value="">Seleccionar Marca</option>
+                      {BRANDS_DATA.map(b => (
+                        <option key={b.name} value={b.name}>{b.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Modelo</label>
-                    <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} />
+                    <select 
+                      required 
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                      value={formData.model} 
+                      onChange={e => setFormData({...formData, model: e.target.value})}
+                      disabled={!formData.make}
+                    >
+                      <option value="">Seleccionar Modelo</option>
+                      {BRANDS_DATA.find(b => b.name === formData.make)?.models?.map(m => (
+                        <option key={m.name} value={m.name}>{m.name}</option>
+                      ))}
+                      {!BRANDS_DATA.find(b => b.name === formData.make)?.models && formData.make && (
+                        <option value="Otro">Otro</option>
+                      )}
+                    </select>
                   </div>
                 </div>
 
@@ -930,15 +882,14 @@ function SellCar() {
                   Información de Contacto
                 </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Teléfono</label>
-                    <input type="tel" required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">WhatsApp</label>
-                    <input type="tel" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} />
-                  </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Información del Propietario (Privado)</label>
+                  <textarea 
+                    placeholder="Escribe aquí el nombre, teléfono o cualquier dato de contacto. Esta información NO se mostrará al público, solo es para control administrativo."
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all min-h-[100px]" 
+                    value={formData.owner_info} 
+                    onChange={e => setFormData({...formData, owner_info: e.target.value})} 
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Ciudad de Ubicación</label>
@@ -967,25 +918,22 @@ function SellCar() {
             <div className="bg-zinc-900 text-white p-10 rounded-[40px] shadow-xl sticky top-32">
               <div className="flex items-center gap-3 mb-6">
                 <Sparkles className="text-red-400 w-6 h-6" />
-                <h3 className="font-bold text-xl">Valoración IA</h3>
+                <h3 className="font-bold text-xl">Consejos de Venta</h3>
               </div>
-              <p className="text-zinc-400 text-sm mb-8 leading-relaxed">¿No estás seguro del precio? Nuestra IA analiza el mercado en tiempo real para darte una recomendación justa.</p>
-              <button 
-                onClick={handleEstimate}
-                disabled={isEstimating}
-                className="w-full bg-white/10 hover:bg-white/20 border border-white/10 py-4 rounded-2xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isEstimating ? "Calculando..." : "Obtener Estimación"}
-              </button>
-              {estimate && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-8 p-6 bg-white/5 rounded-3xl text-sm text-zinc-300 leading-relaxed border border-white/5"
-                >
-                  {estimate}
-                </motion.div>
-              )}
+              <ul className="space-y-4 text-zinc-400 text-sm leading-relaxed">
+                <li className="flex gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <span>Sube fotos nítidas y con buena iluminación.</span>
+                </li>
+                <li className="flex gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <span>Describe detalladamente el estado del vehículo.</span>
+                </li>
+                <li className="flex gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <span>Establece un precio competitivo basado en el mercado.</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>
@@ -993,6 +941,196 @@ function SellCar() {
     </div>
   );
 }
+function EditCarModal({ isOpen, onClose, car, onRefresh }: { isOpen: boolean; onClose: () => void; car: Car; onRefresh: () => void }) {
+  const [formData, setFormData] = useState({
+    make: car.make, model: car.model, year: car.year.toString(), price: car.price.toString(), mileage: car.mileage.toString(), 
+    transmission: car.transmission, fuel_type: car.fuel_type, description: car.description || "",
+    color: car.color || "", phone: car.phone || "", engine: car.engine || "", plate_last_digit: car.plate_last_digit || "", plate_city: car.plate_city || "",
+    soat_until: car.soat_until || "", techno_until: car.techno_until || "", whatsapp: car.whatsapp || "", plate: car.plate || "",
+    vehicle_type: car.vehicle_type || "Automovil", nationality: car.nationality || "Colombiano", location_city: car.location_city || "Cúcuta",
+    owner_info: car.owner_info || ""
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from("cars")
+        .update({
+          ...formData,
+          year: parseInt(formData.year),
+          price: parseInt(formData.price),
+          mileage: parseInt(formData.mileage),
+        })
+        .eq("id", car.id);
+
+      if (error) throw error;
+      alert("¡Vehículo actualizado con éxito!");
+      onRefresh();
+      onClose();
+    } catch (error: any) {
+      alert("Error al actualizar: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+            onClick={onClose} 
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="bg-white w-full max-w-4xl rounded-[40px] p-10 relative shadow-2xl overflow-y-auto max-h-[90vh]"
+          >
+            <button 
+              onClick={onClose}
+              className="absolute top-6 right-6 p-2 hover:bg-zinc-100 rounded-full transition-colors"
+            >
+              <X className="w-6 h-6 text-zinc-400" />
+            </button>
+
+            <div className="mb-8">
+              <h2 className="text-3xl font-black text-zinc-900 mb-2 uppercase">Editar Publicación</h2>
+              <p className="text-zinc-500">Actualiza los detalles de tu vehículo.</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-widest flex items-center gap-2">
+                    <CarIcon className="w-4 h-4 text-red-600" />
+                    Información Básica
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Marca</label>
+                      <select 
+                        required 
+                        className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                        value={formData.make} 
+                        onChange={e => setFormData({...formData, make: e.target.value, model: ""})}
+                      >
+                        <option value="">Seleccionar Marca</option>
+                        {BRANDS_DATA.map(b => (
+                          <option key={b.name} value={b.name}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Modelo</label>
+                      <select 
+                        required 
+                        className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" 
+                        value={formData.model} 
+                        onChange={e => setFormData({...formData, model: e.target.value})}
+                        disabled={!formData.make}
+                      >
+                        <option value="">Seleccionar Modelo</option>
+                        {BRANDS_DATA.find(b => b.name === formData.make)?.models?.map(m => (
+                          <option key={m.name} value={m.name}>{m.name}</option>
+                        ))}
+                        {!BRANDS_DATA.find(b => b.name === formData.make)?.models && formData.make && (
+                          <option value="Otro">Otro</option>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Año</label>
+                      <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Precio</label>
+                      <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">KM</label>
+                      <input required type="number" className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.mileage} onChange={e => setFormData({...formData, mileage: e.target.value})} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Descripción</label>
+                    <textarea className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all min-h-[100px]" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-widest flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-red-600" />
+                    Contacto y Ubicación
+                  </h3>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Información del Propietario (Privado)</label>
+                    <textarea 
+                      placeholder="Nombre, teléfono, etc. (No público)"
+                      className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all min-h-[80px]" 
+                      value={formData.owner_info} 
+                      onChange={e => setFormData({...formData, owner_info: e.target.value})} 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Ciudad de Ubicación</label>
+                    <input required className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all" value={formData.location_city} onChange={e => setFormData({...formData, location_city: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Transmisión</label>
+                      <select className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" value={formData.transmission} onChange={e => setFormData({...formData, transmission: e.target.value})}>
+                        <option value="Automatic">Automático</option>
+                        <option value="Manual">Mecánico</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Combustible</label>
+                      <select className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 focus:ring-2 focus:ring-red-600 transition-all font-bold" value={formData.fuel_type} onChange={e => setFormData({...formData, fuel_type: e.target.value})}>
+                        <option value="Gasoline">Gasolina</option>
+                        <option value="Diesel">Diesel</option>
+                        <option value="Gas">Gas</option>
+                        <option value="Hybrid">Híbrido</option>
+                        <option value="Electric">Eléctrico</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-4 rounded-2xl font-bold text-zinc-600 bg-zinc-100 hover:bg-zinc-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="flex-[2] bg-red-600 text-white py-4 rounded-2xl font-bold hover:bg-red-700 transition-all shadow-xl shadow-red-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSaving ? "Guardando..." : "Guardar Cambios"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -1140,13 +1278,12 @@ function LoginModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   );
 }
 
-function Navbar({ inventory }: { inventory: Car[] }) {
+function Navbar({ inventory, user, setUser }: { inventory: Car[], user: any, setUser: (user: any) => void }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isBrandsDrawerOpen, setIsBrandsDrawerOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Car[]>([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -1169,24 +1306,12 @@ function Navbar({ inventory }: { inventory: Car[] }) {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
 
-    // Check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (!session) setIsUserMenuOpen(false);
-    });
-
     const handleOpenLogin = () => setIsLoginModalOpen(true);
     window.addEventListener('open-login', handleOpenLogin);
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener('open-login', handleOpenLogin);
-      subscription.unsubscribe();
     };
   }, []);
 
@@ -1555,7 +1680,7 @@ function Navbar({ inventory }: { inventory: Car[] }) {
   );
 }
 
-function Favorites({ inventory, favorites, onToggleFavorite }: { inventory: Car[], favorites: number[], onToggleFavorite: (id: number) => void }) {
+function Favorites({ inventory, favorites, onToggleFavorite, user }: { inventory: Car[], favorites: number[], onToggleFavorite: (id: number) => void, user: any }) {
   const favoriteCars = inventory.filter(car => favorites.includes(car.id));
 
   return (
@@ -1574,6 +1699,7 @@ function Favorites({ inventory, favorites, onToggleFavorite }: { inventory: Car[
                 car={car} 
                 isFavorite={true} 
                 onToggleFavorite={onToggleFavorite} 
+                user={user}
               />
             ))}
           </div>
@@ -1592,16 +1718,25 @@ function Favorites({ inventory, favorites, onToggleFavorite }: { inventory: Car[
   );
 }
 
-function MyListings({ inventory, favorites, onToggleFavorite, onRefresh }: { inventory: Car[]; favorites: number[]; onToggleFavorite: (id: number) => void; onRefresh: () => void }) {
-  const [user, setUser] = useState<any>(null);
+function MyListings({ inventory, favorites, onToggleFavorite, onRefresh, user }: { inventory: Car[]; favorites: number[]; onToggleFavorite: (id: number) => void; onRefresh: () => void; user: any }) {
+  const [filters, setFilters] = useState({ make: "", model: "", year: "", minPrice: "", maxPrice: "" });
+  const [editingCar, setEditingCar] = useState<Car | null>(null);
   
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-  }, []);
+  const myListings = inventory.filter(car => {
+    const isOwner = car.user_id === user?.id;
+    if (!isOwner) return false;
 
-  const myListings = inventory.filter(car => car.user_id === user?.id);
+    const matchesMake = !filters.make || car.make === filters.make;
+    const matchesModel = !filters.model || car.model === filters.model;
+    const matchesYear = !filters.year || car.year.toString() === filters.year;
+    const matchesMinPrice = !filters.minPrice || car.price >= parseInt(filters.minPrice);
+    const matchesMaxPrice = !filters.maxPrice || car.price <= parseInt(filters.maxPrice);
+
+    return matchesMake && matchesModel && matchesYear && matchesMinPrice && matchesMaxPrice;
+  });
+
+  const makes = Array.from(new Set(inventory.filter(c => c.user_id === user?.id).map(c => c.make))).sort();
+  const models = Array.from(new Set(inventory.filter(c => c.user_id === user?.id && (!filters.make || c.make === filters.make)).map(c => c.model))).sort();
 
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-zinc-50">
@@ -1609,7 +1744,62 @@ function MyListings({ inventory, favorites, onToggleFavorite, onRefresh }: { inv
         <div className="mb-12">
           <h1 className="text-5xl font-black text-zinc-900 tracking-tight mb-4">MIS PUBLICACIONES</h1>
           <p className="text-zinc-500 font-medium">Gestiona los vehículos que has puesto a la venta.</p>
-          <div className="mt-4 flex gap-4 text-xs font-bold text-zinc-400 uppercase tracking-widest">
+          
+          {/* Filters */}
+          <div className="mt-8 bg-white p-6 rounded-3xl shadow-sm border border-zinc-100 grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Marca</label>
+              <select 
+                className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-sm font-bold"
+                value={filters.make}
+                onChange={e => setFilters({...filters, make: e.target.value, model: ""})}
+              >
+                <option value="">Todas</option>
+                {makes.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Modelo</label>
+              <select 
+                className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-sm font-bold"
+                value={filters.model}
+                onChange={e => setFilters({...filters, model: e.target.value})}
+              >
+                <option value="">Todos</option>
+                {models.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Año</label>
+              <input 
+                type="number" 
+                placeholder="Ej: 2020"
+                className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-sm font-bold"
+                value={filters.year}
+                onChange={e => setFilters({...filters, year: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Precio Mín</label>
+              <input 
+                type="number" 
+                className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-sm font-bold"
+                value={filters.minPrice}
+                onChange={e => setFilters({...filters, minPrice: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-2">Precio Máx</label>
+              <input 
+                type="number" 
+                className="w-full bg-zinc-50 border-none rounded-xl py-2 px-3 text-sm font-bold"
+                value={filters.maxPrice}
+                onChange={e => setFilters({...filters, maxPrice: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex gap-4 text-xs font-bold text-zinc-400 uppercase tracking-widest">
             <div className="flex items-center gap-2"><Zap className="w-4 h-4 text-black" /> Subir (Mover al inicio)</div>
             <div className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> Destacar (Prioridad máxima)</div>
           </div>
@@ -1625,20 +1815,31 @@ function MyListings({ inventory, favorites, onToggleFavorite, onRefresh }: { inv
                 onToggleFavorite={onToggleFavorite} 
                 showManagementActions={true}
                 onRefresh={onRefresh}
+                onEdit={() => setEditingCar(car)}
+                user={user}
               />
             ))}
           </div>
         ) : (
           <div className="bg-white rounded-[32px] p-20 text-center border border-dashed border-zinc-200">
             <CarIcon className="w-16 h-16 text-zinc-200 mx-auto mb-6" />
-            <h3 className="text-xl font-bold text-zinc-900 mb-2">No tienes publicaciones</h3>
-            <p className="text-zinc-500">¿Quieres vender tu carro? Publícalo gratis con nosotros.</p>
+            <h3 className="text-xl font-bold text-zinc-900 mb-2">No se encontraron publicaciones</h3>
+            <p className="text-zinc-500">Intenta ajustar los filtros o publica un nuevo vehículo.</p>
             <Link to="/sell" className="inline-block mt-8 bg-red-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-red-700 transition-colors">
               Publicar Ahora
             </Link>
           </div>
         )}
       </div>
+
+      {editingCar && (
+        <EditCarModal 
+          isOpen={!!editingCar} 
+          onClose={() => setEditingCar(null)} 
+          car={editingCar} 
+          onRefresh={onRefresh} 
+        />
+      )}
     </div>
   );
 }
@@ -1782,16 +1983,21 @@ function CarCard({
   isFavorite, 
   onToggleFavorite, 
   showManagementActions = false,
-  onRefresh
+  onRefresh,
+  onEdit,
+  user
 }: { 
   car: Car; 
   isFavorite?: boolean; 
   onToggleFavorite?: (id: number) => void; 
   showManagementActions?: boolean;
   onRefresh?: () => void;
+  onEdit?: () => void;
+  user?: any;
   key?: any 
 }) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const isOwner = user?.id === car.user_id;
 
   const handleBump = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1847,27 +2053,42 @@ function CarCard({
         <Heart className={cn("w-5 h-5", isFavorite && "fill-current")} />
       </button>
       
-      {showManagementActions && (
+      {(showManagementActions || isOwner) && (
         <div className="absolute top-4 left-4 z-10 flex gap-2">
-          <button 
-            onClick={handleBump}
-            disabled={isUpdating}
-            className="bg-black/80 backdrop-blur-md text-white p-2 rounded-full hover:bg-black transition-all"
-            title="Subir anuncio (Mover al inicio)"
-          >
-            <Zap className={cn("w-4 h-4", isUpdating && "animate-pulse")} />
-          </button>
-          <button 
-            onClick={handleToggleFeatured}
-            disabled={isUpdating}
-            className={cn(
-              "backdrop-blur-md p-2 rounded-full transition-all",
-              car.is_featured ? "bg-amber-500 text-white" : "bg-white/80 text-zinc-400 hover:text-amber-500"
-            )}
-            title={car.is_featured ? "Quitar de destacados" : "Marcar como destacado"}
-          >
-            <Sparkles className={cn("w-4 h-4", isUpdating && "animate-pulse")} />
-          </button>
+          {isOwner && (
+            <>
+              <button 
+                onClick={handleBump}
+                disabled={isUpdating}
+                className="bg-black/80 backdrop-blur-md text-white p-2 rounded-full hover:bg-black transition-all"
+                title="Subir anuncio (Mover al inicio)"
+              >
+                <Zap className={cn("w-4 h-4", isUpdating && "animate-pulse")} />
+              </button>
+              <button 
+                onClick={handleToggleFeatured}
+                disabled={isUpdating}
+                className={cn(
+                  "backdrop-blur-md p-2 rounded-full transition-all",
+                  car.is_featured ? "bg-amber-500 text-white" : "bg-white/80 text-zinc-400 hover:text-amber-500"
+                )}
+                title={car.is_featured ? "Quitar de destacados" : "Marcar como destacado"}
+              >
+                <Sparkles className={cn("w-4 h-4", isUpdating && "animate-pulse")} />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onEdit?.();
+                }}
+                className="bg-blue-600/80 backdrop-blur-md text-white p-2 rounded-full hover:bg-blue-600 transition-all"
+                title="Editar anuncio"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -2089,13 +2310,14 @@ function Home({ favorites, onToggleFavorite }: { favorites: number[], onToggleFa
   );
 }
 
-function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onToggleFavorite: (id: number) => void }) {
+function Inventory({ favorites, onToggleFavorite, user }: { favorites: number[], onToggleFavorite: (id: number) => void, user: any }) {
   const [cars, setCars] = useState<Car[]>([]);
   const [filteredCars, setFilteredCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [makeFilter, setMakeFilter] = useState(searchParams.get("make") || "All");
+  const [modelFilter, setModelFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
   const [transmissionFilter, setTransmissionFilter] = useState("All");
   const [fuelFilter, setFuelFilter] = useState("All");
@@ -2138,6 +2360,9 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
     if (makeFilter !== "All") {
       result = result.filter(c => c.make === makeFilter);
     }
+    if (modelFilter !== "All") {
+      result = result.filter(c => c.model === modelFilter);
+    }
     if (typeFilter !== "All") {
       result = result.filter(c => c.vehicle_type === typeFilter);
     }
@@ -2155,9 +2380,12 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
     
     // Apply sorting
     const sortedResult = [...result].sort((a, b) => {
-      // Always prioritize featured cars unless sorting by something else specifically?
-      // Actually, let's keep featured cars at top for "newest" only, or maybe always?
-      // User said "colocar unos carros al inicio", so featured should probably always be first.
+      // If sorting by newest, absolute newest date wins
+      if (sortBy === "newest") {
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      }
+
+      // For other sorts, prioritize featured cars
       if (a.is_featured && !b.is_featured) return -1;
       if (!a.is_featured && b.is_featured) return 1;
 
@@ -2166,16 +2394,16 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
         case "price_desc": return b.price - a.price;
         case "year_desc": return b.year - a.year;
         case "mileage_asc": return a.mileage - b.mileage;
-        case "newest":
         default:
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
       }
     });
     
     setFilteredCars(sortedResult);
-  }, [search, makeFilter, typeFilter, transmissionFilter, fuelFilter, nationalityFilter, priceRange, yearRange, sortBy, cars]);
+  }, [search, makeFilter, modelFilter, typeFilter, transmissionFilter, fuelFilter, nationalityFilter, priceRange, yearRange, sortBy, cars]);
 
   const makes = ["All", ...new Set(cars.map(c => c.make))].sort();
+  const models = ["All", ...new Set(cars.filter(c => makeFilter === "All" || c.make === makeFilter).map(c => c.model))].sort();
   const types = ["All", ...new Set(cars.filter(c => c.vehicle_type).map(c => c.vehicle_type!))].sort();
   const transmissions = ["All", ...new Set(cars.map(c => c.transmission))].sort();
   const fuels = ["All", ...new Set(cars.map(c => c.fuel_type))].sort();
@@ -2236,11 +2464,27 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
                   <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Marca</label>
                   <select 
                     value={makeFilter}
-                    onChange={(e) => setMakeFilter(e.target.value)}
+                    onChange={(e) => {
+                      setMakeFilter(e.target.value);
+                      setModelFilter("All");
+                    }}
                     className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-600 transition-all font-bold"
                   >
                     {makes.map(make => (
                       <option key={make} value={make}>{make === "All" ? "Todas las Marcas" : make}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold block mb-3">Modelo</label>
+                  <select 
+                    value={modelFilter}
+                    onChange={(e) => setModelFilter(e.target.value)}
+                    className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-600 transition-all font-bold"
+                  >
+                    {models.map(model => (
+                      <option key={model} value={model}>{model === "All" ? "Todos los Modelos" : model}</option>
                     ))}
                   </select>
                 </div>
@@ -2362,6 +2606,7 @@ function Inventory({ favorites, onToggleFavorite }: { favorites: number[], onTog
                   onClick={() => {
                     setSearch("");
                     setMakeFilter("All");
+                    setModelFilter("All");
                     setTypeFilter("All");
                     setTransmissionFilter("All");
                     setFuelFilter("All");
@@ -2416,6 +2661,9 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState<string | null>(null);
 
+  const [isSliderOpen, setIsSliderOpen] = useState(false);
+  const [sliderIndex, setSliderIndex] = useState(0);
+
   useEffect(() => {
     async function fetchCar() {
       if (!id || !isSupabaseConfigured) return;
@@ -2439,8 +2687,60 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
 
   const images = car.all_images && car.all_images.length > 0 ? car.all_images : [car.image_url];
 
+  const openSlider = (index: number) => {
+    setSliderIndex(index);
+    setIsSliderOpen(true);
+  };
+
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-white">
+      <AnimatePresence>
+        {isSliderOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
+          >
+            <button 
+              onClick={() => setIsSliderOpen(false)}
+              className="absolute top-8 right-8 text-white p-2 hover:bg-white/10 rounded-full transition-all z-10"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            
+            <button 
+              onClick={() => setSliderIndex((prev) => (prev - 1 + images.length) % images.length)}
+              className="absolute left-8 text-white p-4 hover:bg-white/10 rounded-full transition-all z-10"
+            >
+              <ChevronLeft className="w-10 h-10" />
+            </button>
+            
+            <button 
+              onClick={() => setSliderIndex((prev) => (prev + 1) % images.length)}
+              className="absolute right-8 text-white p-4 hover:bg-white/10 rounded-full transition-all z-10"
+            >
+              <ChevronRight className="w-10 h-10" />
+            </button>
+
+            <div className="w-full h-full flex items-center justify-center p-4 md:p-20">
+              <motion.img 
+                key={sliderIndex}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                src={images[sliderIndex]} 
+                className="max-w-full max-h-full object-contain shadow-2xl"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white font-bold bg-black/50 px-6 py-2 rounded-full backdrop-blur-md">
+              {sliderIndex + 1} / {images.length}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {car && (
         <SEO 
           title={`${car.make} ${car.model} ${car.year}`} 
@@ -2452,7 +2752,10 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           <div className="space-y-8">
-            <div className="aspect-[16/10] rounded-[40px] overflow-hidden shadow-2xl bg-zinc-100">
+            <div 
+              className="aspect-[16/10] rounded-[40px] overflow-hidden shadow-2xl bg-zinc-100 cursor-zoom-in"
+              onClick={() => openSlider(images.indexOf(activeImage))}
+            >
               <img
                 src={activeImage || car.image_url || null}
                 alt={car.model}
@@ -2551,6 +2854,12 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
                       <div className="font-bold text-zinc-900 text-right">{car.techno_until}</div>
                     </>
                   )}
+                  {car.plate_last_digit && (
+                    <>
+                      <div className="text-zinc-400">Último dígito placa</div>
+                      <div className="font-bold text-zinc-900 text-right">{car.plate_last_digit}</div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -2563,20 +2872,15 @@ function CarDetail({ favorites, onToggleFavorite }: { favorites: number[], onTog
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col gap-4">
               <a 
-                href={`tel:${car.phone || "573000000000"}`}
-                className="flex-1 bg-black text-white py-5 rounded-2xl font-bold text-lg hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 text-center"
-              >
-                <Phone className="w-5 h-5" /> Contactar Vendedor
-              </a>
-              <a 
-                href={`https://wa.me/${car.whatsapp?.replace(/\D/g, '') || "573000000000"}`}
+                href={`https://wa.me/573222832616?text=${encodeURIComponent(`Hola, estoy interesado en el ${car.make} ${car.model} ${car.year} que vi en Autosya.`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 bg-red-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-red-700 transition-all flex items-center justify-center gap-2 text-center"
+                className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-bold text-lg hover:bg-[#22c35e] transition-all flex items-center justify-center gap-3 text-center shadow-xl shadow-[#25D366]/20"
               >
-                <MessageCircle className="w-5 h-5" /> WhatsApp
+                <MessageCircle className="w-6 h-6 fill-current" /> 
+                Contactar por WhatsApp
               </a>
             </div>
           </div>
@@ -2710,6 +3014,7 @@ function ConfigError() {
 }
 
 export default function App() {
+  const [user, setUser] = useState<any>(null);
   const [inventory, setInventory] = useState<Car[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<number[]>(() => {
@@ -2731,6 +3036,16 @@ export default function App() {
     console.log("App mounted, checking config...");
     console.log("Supabase Configured:", isSupabaseConfigured);
     
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
     if (!isSupabaseConfigured) {
       console.warn("Supabase is not configured. Please check environment variables.");
       return;
@@ -2750,6 +3065,10 @@ export default function App() {
       }
     }
     fetchInventory();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const refreshInventory = async () => {
@@ -2787,15 +3106,15 @@ export default function App() {
   return (
     <Router>
       <div className="font-sans selection:bg-red-600/30">
-        <Navbar inventory={inventory} />
+        <Navbar inventory={inventory} user={user} setUser={setUser} />
         <main>
           <Routes>
             <Route path="/" element={<Home favorites={favorites} onToggleFavorite={toggleFavorite} />} />
-            <Route path="/inventory" element={<Inventory favorites={favorites} onToggleFavorite={toggleFavorite} />} />
+            <Route path="/inventory" element={<Inventory favorites={favorites} onToggleFavorite={toggleFavorite} user={user} />} />
             <Route path="/car/:id" element={<CarDetail favorites={favorites} onToggleFavorite={toggleFavorite} />} />
             <Route path="/sell" element={<SellCar />} />
-            <Route path="/favorites" element={<Favorites inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} />} />
-            <Route path="/my-listings" element={<MyListings inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} onRefresh={refreshInventory} />} />
+            <Route path="/favorites" element={<Favorites inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} user={user} />} />
+            <Route path="/my-listings" element={<MyListings inventory={inventory} favorites={favorites} onToggleFavorite={toggleFavorite} onRefresh={refreshInventory} user={user} />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
